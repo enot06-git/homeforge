@@ -1,19 +1,22 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 // ── Global styles ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLE = `
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;500&family=Barlow:wght@400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --bg:#0f0f0f;--bg2:#181818;--bg3:#222;--border:#2e2e2e;
+  --bg:#0f0f0f;--bg2:#181818;--bg3:#222;--bg4:#2a2a2a;--border:#2e2e2e;
   --amber:#f59e0b;--red:#ef4444;--green:#22c55e;--blue:#3b82f6;--purple:#a855f7;
-  --text:#e8e8e8;--muted:#888;
+  --text:#e8e8e8;--muted:#888;--on-accent:#0a0a0a;
   --font-h:'Barlow Condensed',sans-serif;--font-b:'Barlow',sans-serif;--font-m:'IBM Plex Mono',monospace;
 }
 body{background:var(--bg);color:var(--text);font-family:var(--font-b);overflow-x:hidden;}
+button{font-family:inherit;cursor:pointer;}
+button:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
 ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg2);}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
 @keyframes spin{to{transform:rotate(360deg);}}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
 `;
 const injectStyle = () => {
   if (document.getElementById("hf2")) return;
@@ -728,15 +731,10 @@ async function restoreFromSheets(setData, setSyncStatus) {
 
 async function callClaude(messages, system = "") {
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("/api/claude", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 800,
-        system,
-        messages,
-      }),
+      body: JSON.stringify({ system, messages }),
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
@@ -748,7 +746,6 @@ async function callClaude(messages, system = "") {
     if (!text) throw new Error("Empty response from API");
     return text;
   } catch(e) {
-    // Re-throw with clean message
     throw new Error(e.message || "Network error");
   }
 }
@@ -763,11 +760,12 @@ const S = {
   h2: { fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 16, letterSpacing: 1, textTransform: "uppercase", color: "var(--amber)", marginBottom: 10, marginTop: 18 },
   sub: { color: "var(--muted)", fontSize: 11, marginBottom: 16, fontFamily: "var(--font-m)" },
   card: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 10 },
-  btn: { background: "var(--amber)", color: "#000", border: "none", borderRadius: 6, padding: "11px 18px", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 14, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 },
+  cardRaised: { background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 10 },
+  btn: { background: "var(--amber)", color: "var(--on-accent)", border: "none", borderRadius: 6, padding: "11px 18px", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 14, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 },
   btnOutline: { background: "transparent", color: "var(--amber)", border: "1px solid var(--amber)", borderRadius: 6, padding: "7px 13px", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 12, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" },
-  btnSm: { background: "var(--bg3)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, padding: "5px 10px", fontFamily: "var(--font-m)", fontSize: 11, cursor: "pointer" },
-  btnGreen: { background: "var(--green)", color: "#000", border: "none", borderRadius: 6, padding: "11px 18px", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 14, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 },
-  input: { background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 11px", color: "var(--text)", fontFamily: "var(--font-m)", fontSize: 13, width: "100%", outline: "none" },
+  btnSm: { background: "var(--bg3)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, padding: "10px 14px", fontFamily: "var(--font-m)", fontSize: 11, cursor: "pointer", minHeight: 44, display: "inline-flex", alignItems: "center" },
+  btnGreen: { background: "var(--green)", color: "var(--on-accent)", border: "none", borderRadius: 6, padding: "11px 18px", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 14, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 },
+  input: { background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 6, padding: "10px 11px", color: "var(--text)", fontFamily: "var(--font-m)", fontSize: 13, width: "100%", outline: "none", minHeight: 44 },
   label: { fontSize: 11, color: "var(--muted)", fontFamily: "var(--font-m)", marginBottom: 4, display: "block" },
   chip: (a) => ({ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 6, border: "1px solid " + (a ? "var(--amber)" : "var(--border)"), background: a ? "rgba(245,158,11,0.1)" : "var(--bg3)", cursor: "pointer", color: a ? "var(--amber)" : "var(--text)", fontFamily: "var(--font-b)", fontSize: 13, transition: "all .15s" }),
   navBar: { position: "fixed", bottom: 0, left: 0, right: 0, background: "var(--bg2)", borderTop: "1px solid var(--border)", display: "flex", zIndex: 200 },
@@ -842,10 +840,10 @@ function EquipmentScreen({ data, setData, onNext }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
         {EQUIPMENT_LIST.map(e => (
-          <div key={e.id} style={{ ...S.chip(eq.includes(e.id)), flexDirection: "column", gap: 3, padding: "12px 8px", textAlign: "center", justifyContent: "center" }} onClick={() => toggle(e.id)}>
+          <button key={e.id} type="button" style={{ ...S.chip(eq.includes(e.id)), flexDirection: "column", gap: 3, padding: "12px 8px", textAlign: "center", justifyContent: "center", minHeight: 64, width: "100%" }} onClick={() => toggle(e.id)}>
             <span style={{ fontSize: 22 }}>{e.icon}</span>
             <span style={{ fontSize: 12 }}>{e.label}</span>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -951,7 +949,7 @@ function ProfileScreen({ data, setData, onNext, onBack }) {
       <div style={S.h2}>Experience Level</div>
       <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
         {["Beginner","Intermediate","Advanced"].map(l => (
-          <div key={l} style={{ ...S.chip(data.level === l), flex: 1, justifyContent: "center" }} onClick={() => set("level", l)}>{l}</div>
+          <button key={l} type="button" style={{ ...S.chip(data.level === l), flex: 1, justifyContent: "center", minHeight: 44 }} onClick={() => set("level", l)}>{l}</button>
         ))}
       </div>
       {isBegin && <div style={{ ...S.info, marginBottom: 4 }}>Beginner mode: keep RIR 3+, gradual progression</div>}
@@ -959,11 +957,11 @@ function ProfileScreen({ data, setData, onNext, onBack }) {
       <div style={S.h2}>Primary Goal</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 4 }}>
         {GOALS.map(g => (
-          <div key={g.id} style={{ ...S.chip(data.goal === g.id), flexDirection: "column", gap: 2, padding: "10px 8px", textAlign: "center" }} onClick={() => set("goal", g.id)}>
+          <button key={g.id} type="button" style={{ ...S.chip(data.goal === g.id), flexDirection: "column", gap: 2, padding: "10px 8px", textAlign: "center", minHeight: 72, width: "100%" }} onClick={() => set("goal", g.id)}>
             <span style={{ fontSize: 18 }}>{g.icon}</span>
             <span style={{ fontWeight: 600, fontSize: 12 }}>{g.label}</span>
             <span style={{ fontSize: 10, color: "var(--muted)", fontFamily: "var(--font-m)" }}>{g.desc}</span>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -1077,7 +1075,10 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const _isIntense  = _meso.phase === "intensification";
   const numSets = (isTimed || repOverride) ? effectiveSets : _isDeload ? 2 : rr.sets;
   const sets = sessionLog[key] || Array.from({ length: numSets }, () => isTimed ? { seconds: "", rpe: "" } : { weight: "", reps: "", rpe: "" });
-  const suggestion = getSmartSuggestion(key, goal, history, data.profileBaseline, data);
+  const suggestion = useMemo(
+    () => getSmartSuggestion(key, goal, history, data.profileBaseline, data),
+    [key, goal, history, data.profileBaseline, data.nextSession, data.barWeight, data.barbellPlates, data.ezbarWeight, data.ezbarPlates, data.dumbbellMax]
+  );
   const weightDisplay = suggestion?.weight ? formatWeightDisplay(key, suggestion.weight, data) : null;
 
   const prevSession = (history || []).find(h => h.log?.[key]);
@@ -1106,51 +1107,51 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const ezW   = data.ezbarWeight || "8";
   const ezPlt = data.ezbarPlates || "";
 
-  let warmupSets = [];
+  const warmupSets = useMemo(() => {
+  let sets = [];
   try { if (!isTimed && !repsOnly && workingWeight > 0) {
     if (BIG4_BENCH.includes(key) || BIG4_OHP.includes(key)) {
-      // Bar + 3 loaded sets
-      warmupSets = [
+      sets = [
         { label:"W1", pct:"bar",  kg: snapBar(parseFloat(barW), barW, bPlts), reps:10 },
         { label:"W2", pct:"50%",  kg: snapBar(workingWeight*0.50, barW, bPlts), reps:8 },
         { label:"W3", pct:"70%",  kg: snapBar(workingWeight*0.70, barW, bPlts), reps:5 },
         { label:"W4", pct:"85%",  kg: snapBar(workingWeight*0.85, barW, bPlts), reps:3 },
       ];
     } else if (BIG4_SQUAT.includes(key)) {
-      warmupSets = [
+      sets = [
         { label:"W1", pct:"bar",  kg: snapBar(parseFloat(barW), barW, bPlts), reps:10 },
         { label:"W2", pct:"50%",  kg: snapBar(workingWeight*0.50, barW, bPlts), reps:8 },
         { label:"W3", pct:"70%",  kg: snapBar(workingWeight*0.70, barW, bPlts), reps:5 },
         { label:"W4", pct:"85%",  kg: snapBar(workingWeight*0.85, barW, bPlts), reps:3 },
       ];
     } else if (BIG4_DEAD.includes(key)) {
-      // No empty bar — start at 40% for deadlift pattern
-      warmupSets = [
+      sets = [
         { label:"W1", pct:"40%",  kg: snapBar(workingWeight*0.40, barW, bPlts), reps:8 },
         { label:"W2", pct:"60%",  kg: snapBar(workingWeight*0.60, barW, bPlts), reps:5 },
         { label:"W3", pct:"75%",  kg: snapBar(workingWeight*0.75, barW, bPlts), reps:3 },
         { label:"W4", pct:"85%",  kg: snapBar(workingWeight*0.85, barW, bPlts), reps:2 },
       ];
     } else if (isBarbell && workingWeight > 20) {
-      warmupSets = [
+      sets = [
         { label:"W1", pct:"50%",  kg: snapBar(workingWeight*0.50, barW, bPlts), reps:8 },
         { label:"W2", pct:"70%",  kg: snapBar(workingWeight*0.70, barW, bPlts), reps:5 },
         { label:"W3", pct:"85%",  kg: snapBar(workingWeight*0.85, barW, bPlts), reps:3 },
       ];
     } else if (isEZ && workingWeight > 14) {
-      warmupSets = [
+      sets = [
         { label:"W1", pct:"50%",  kg: snapBar(workingWeight*0.50, ezW, ezPlt), reps:8 },
         { label:"W2", pct:"75%",  kg: snapBar(workingWeight*0.75, ezW, ezPlt), reps:5 },
       ];
     } else if (isDumbbell && workingWeight > 16) {
-      warmupSets = [
+      sets = [
         { label:"W1", pct:"60%",  kg: (workingWeight*0.6).toFixed(1), reps:8 },
         { label:"W2", pct:"80%",  kg: (workingWeight*0.8).toFixed(1), reps:5 },
       ];
     }
-    // Filter out warmup sets where kg equals or exceeds working weight
-    warmupSets = warmupSets.filter(ws => parseFloat(ws.kg) < workingWeight);
-  } } catch(e) { warmupSets = []; }
+    sets = sets.filter(ws => parseFloat(ws.kg) < workingWeight);
+  } } catch(e) { sets = []; }
+  return sets;
+  }, [key, isTimed, repsOnly, workingWeight, barW, bPlts, ezW, ezPlt, isBarbell, isEZ]);
 
   const totalVol = sets.reduce((a,s) => a+(parseFloat(s.weight)||0)*(parseInt(s.reps)||0), 0);
   const prevVol = prevSets.reduce((a,s) => a+(parseFloat(s.weight)||0)*(parseInt(s.reps)||0), 0);
@@ -1232,7 +1233,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
             <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", marginTop:2 }}>{activeEx.muscle}</div>
           </div>
         </div>
-        <button style={S.btnSm} onClick={() => setExpanded(e => !e)}>{expanded ? "▲" : "Log"}</button>
+        <button style={S.btnSm} aria-label={expanded ? "Collapse exercise" : "Log sets"} onClick={() => setExpanded(e => !e)}>{expanded ? "▲" : "Log"}</button>
       </div>
 
       {/* ── TODAY'S TARGET — always visible ── */}
@@ -1310,9 +1311,10 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
       {/* ── Description dropdown ── */}
       <div style={{ marginBottom:6 }}>
         <button style={{ ...S.btnSm, width:"100%", textAlign:"left", display:"flex", justifyContent:"space-between", marginBottom: showDesc ? 6 : 0 }}
+          aria-label={showDesc ? "Hide technique cues" : "Show technique cues"}
           onClick={() => setShowDesc(d => !d)}>
           <span>📖 Technique cues</span>
-          <span>{showDesc ? "▲" : "▼"}</span>
+          <span aria-hidden="true">{showDesc ? "▲" : "▼"}</span>
         </button>
         {showDesc && tips.length > 0 && (
           <div style={{ background:"var(--bg3)", borderRadius:6, padding:"10px 12px", animation:"fadeUp .15s ease both" }}>
@@ -1510,20 +1512,25 @@ function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
   const isIntense  = meso.phase === "intensification";
   const phaseLen   = PHASE_LENGTHS[meso.phase] || 12;
 
-  const _rawExercises = getExercisesForDay(day, data.equipment||[], data.goal, data.favourites, data.level);
-  const _ov = (data.sessionOverride?.day === day) ? data.sessionOverride : { removed: [], replaced: {} };
-  const exercises = _rawExercises
-    .filter(ex => !_ov.removed.includes(ex.name))
-    .map(ex => {
-      const rep = _ov.replaced[ex.name];
-      if (!rep) return ex;
-      const dbEx = Object.values(EXERCISE_DB).flat().find(e => e.name === rep);
-      return dbEx ? { ...dbEx, isFav: false } : ex;
-    });
+  const exercises = useMemo(() => {
+    const raw = getExercisesForDay(day, data.equipment||[], data.goal, data.favourites, data.level);
+    const ov = (data.sessionOverride?.day === day) ? data.sessionOverride : { removed: [], replaced: {} };
+    return raw
+      .filter(ex => !ov.removed.includes(ex.name))
+      .map(ex => {
+        const rep = ov.replaced[ex.name];
+        if (!rep) return ex;
+        const dbEx = Object.values(EXERCISE_DB).flat().find(e => e.name === rep);
+        return dbEx ? { ...dbEx, isFav: false } : ex;
+      });
+  }, [day, data.equipment, data.goal, data.favourites, data.level, data.sessionOverride]);
   const [sessionLog, setSessionLog] = useState({});
   const [finished, setFinished] = useState(false);
   const [trendDismissed, setTrendDismissed] = useState(false);
-  const trends = trendDismissed ? [] : detectTrends(day, data.history || []);
+  const trends = useMemo(
+    () => trendDismissed ? [] : detectTrends(day, data.history || []),
+    [trendDismissed, day, data.history]
+  );
   const [sessionRating, setSessionRating] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
   const [planSaved, setPlanSaved] = useState(false);
@@ -1646,7 +1653,7 @@ function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
             <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:13,
               color:"var(--purple)", letterSpacing:1 }}>📈 TREND ALERT</span>
-            <button style={{ ...S.btnSm, fontSize:10, color:"var(--muted)" }}
+            <button style={{ ...S.btnSm, fontSize:10, color:"var(--muted)" }} aria-label="Dismiss trend alert"
               onClick={() => setTrendDismissed(true)}>Dismiss ✕</button>
           </div>
           {trends.map((t,i) => (
@@ -1682,7 +1689,7 @@ function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
         <label style={S.label}>RATING (1-5)</label>
         <div style={{ display:"flex", gap:6, marginBottom:10 }}>
           {["1","2","3","4","5"].map(r => (
-            <div key={r} style={{ ...S.chip(sessionRating===r), flex:1, justifyContent:"center", padding:"7px 4px", fontSize:12 }} onClick={() => setSessionRating(r)}>{"⭐".repeat(parseInt(r))}</div>
+            <button key={r} type="button" style={{ ...S.chip(sessionRating===r), flex:1, justifyContent:"center", padding:"10px 4px", fontSize:12, minHeight: 44 }} onClick={() => setSessionRating(r)}>{"⭐".repeat(parseInt(r))}</button>
           ))}
         </div>
         <label style={S.label}>NOTES</label>
@@ -1749,7 +1756,7 @@ Be concise (under 200 words), practical, personalized.`;
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 20px" }}>
         {messages.map((m, i) => (
           <div key={i} style={{ marginBottom: 10, display: "flex", justifyContent: m.role==="user"?"flex-end":"flex-start", animation: "fadeUp .2s ease both" }}>
-            <div style={{ maxWidth: "82%", padding: "9px 13px", borderRadius: 10, background: m.role==="user"?"var(--amber)":"var(--bg3)", color: m.role==="user"?"#000":"var(--text)", fontFamily: "var(--font-b)", fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap", borderBottomRightRadius: m.role==="user"?2:10, borderBottomLeftRadius: m.role==="user"?10:2 }}>
+            <div style={{ maxWidth: "82%", padding: "9px 13px", borderRadius: 10, background: m.role==="user"?"var(--amber)":"var(--bg3)", color: m.role==="user"?"var(--on-accent)":"var(--text)", fontFamily: "var(--font-b)", fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap", borderBottomRightRadius: m.role==="user"?2:10, borderBottomLeftRadius: m.role==="user"?10:2 }}>
               {m.content}
             </div>
           </div>
@@ -2950,13 +2957,13 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
 
       {/* Today's session card */}
       <div style={S.h2}>Today's Session</div>
-      <div style={{ ...S.card, border:"1px solid var(--amber)", marginBottom:14 }}>
+      <div style={{ ...S.cardRaised, border:"1px solid var(--amber)", marginBottom:14 }}>
         {/* Day selector */}
         <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--amber)", letterSpacing:1, marginBottom:8 }}>SELECT DAY</div>
         <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:14 }}>
           {split.filter(d => d !== "REST").map(d => (
-            <div key={d} style={{ ...S.chip(activeDay === d), padding:"6px 10px", fontSize:12 }}
-              onClick={() => setSelectedDay(d)}>{d}</div>
+            <button key={d} type="button" style={{ ...S.chip(activeDay === d), padding:"10px 12px", fontSize:12, minHeight: 44 }}
+              onClick={() => setSelectedDay(d)}>{d}</button>
           ))}
         </div>
 
