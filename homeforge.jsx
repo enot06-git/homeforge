@@ -432,6 +432,44 @@ function detectTrends(day, history) {
   return flags;
 }
 
+// ── Weekly volume (last N weeks, oldest→newest) ───────────────────────────────
+function getWeeklyVolumes(history, numWeeks = 6) {
+  const now = new Date();
+  const curWeekStart = new Date(now);
+  curWeekStart.setDate(now.getDate() - now.getDay());
+  curWeekStart.setHours(0, 0, 0, 0);
+  return Array.from({ length: numWeeks }, (_, i) => {
+    const wStart = new Date(curWeekStart);
+    wStart.setDate(curWeekStart.getDate() - (numWeeks - 1 - i) * 7);
+    const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate() + 7);
+    const vol = (history || [])
+      .filter(h => { const d = new Date(h.date); return d >= wStart && d < wEnd; })
+      .reduce((a, h) => a + (parseFloat(h.volume) || 0), 0);
+    return { vol, isCurrent: i === numWeeks - 1 };
+  });
+}
+
+// ── PR detection — did last session beat any prior best? ─────────────────────
+function detectRecentPR(history) {
+  if ((history || []).length < 2) return null;
+  const last = history[0];
+  const prior = history.slice(1);
+  for (const [name, sets] of Object.entries(last.log || {})) {
+    const bestWeight = Math.max(0, ...sets.map(s => parseFloat(s.weight) || 0));
+    if (bestWeight <= 0) continue;
+    let priorBest = 0;
+    for (const s of prior) {
+      const ex = s.log?.[name] || [];
+      priorBest = Math.max(priorBest, ...ex.map(x => parseFloat(x.weight) || 0));
+    }
+    if (bestWeight > priorBest && priorBest > 0) {
+      const prSet = sets.find(s => parseFloat(s.weight) === bestWeight);
+      return { name, weight: bestWeight, reps: prSet?.reps };
+    }
+  }
+  return null;
+}
+
 // ── Mesocycle helpers ────────────────────────────────────────────────────────
 const PHASE_LENGTHS = { accumulation: 12, intensification: 9, deload: 3 };
 
@@ -778,6 +816,27 @@ const S = {
   info: { background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.3)", borderRadius: 6, padding: "8px 12px", marginBottom: 8, fontFamily: "var(--font-m)", fontSize: 12, color: "var(--blue)" },
   success: { background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 6, padding: "8px 12px", marginBottom: 8, fontFamily: "var(--font-m)", fontSize: 12, color: "var(--green)" },
 };
+
+// ── BW Sparkline ─────────────────────────────────────────────────────────────
+function BWSparkline({ data }) {
+  if (!data || data.length < 2) return null;
+  const weights = data.map(d => parseFloat(d.weight));
+  const min = Math.min(...weights);
+  const max = Math.max(...weights);
+  const range = max - min || 0.5;
+  const W = 52, H = 22;
+  const pts = weights.map((w, i) => [
+    (i / (weights.length - 1)) * W,
+    H - ((w - min) / range) * (H - 6) - 3,
+  ]);
+  const path = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  return (
+    <svg width={W} height={H} style={{ overflow: "visible", display: "block", flexShrink: 0 }}>
+      <path d={path} fill="none" stroke="var(--blue)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="2.5" fill="var(--blue)" />
+    </svg>
+  );
+}
 
 // ── Rest Timer ────────────────────────────────────────────────────────────────
 function RestTimer({ seconds }) {
@@ -2823,6 +2882,19 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
   const daysSinceBW = lastBW ? Math.floor((new Date() - new Date(lastBW.date)) / 86400000) : 999;
   const needsBWPrompt = daysSinceBW >= 7;
 
+  // ── Stats computations ─────────────────────────────────────────────────────
+  const meso = initMesocycle(data.mesocycle);
+  const phaseLen = PHASE_LENGTHS[meso.phase] || 12;
+  const weeklyVols = useMemo(() => getWeeklyVolumes(history), [history]);
+  const thisWeekVol = weeklyVols[weeklyVols.length - 1]?.vol || 0;
+  const lastWeekVol = weeklyVols[weeklyVols.length - 2]?.vol || 0;
+  const volDelta = lastWeekVol > 100 ? Math.round((thisWeekVol - lastWeekVol) / lastWeekVol * 100) : null;
+  const recentPR = useMemo(() => detectRecentPR(history), [history]);
+  const bwRecent = useMemo(() => bwHistory.slice(0, 5).reverse(), [bwHistory]);
+  const bwDelta = bwRecent.length >= 2
+    ? +(parseFloat(bwRecent[bwRecent.length - 1].weight) - parseFloat(bwRecent[0].weight)).toFixed(1)
+    : 0;
+
   // Recovery status per muscle
   const today = new Date();
   const musclesForDay = MUSCLE_MAP[activeDay] || [];
@@ -2911,36 +2983,92 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
 
   return (
     <div style={{ ...S.section, paddingBottom: 80 }}>
-      {/* Greeting */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)", marginBottom:4 }}>{today2.toUpperCase()}</div>
-        <div style={S.h1}>Ready to <span style={{ color:"var(--amber)" }}>Train?</span></div>
-        <div style={{ display:"flex", alignItems:"flex-end", gap:0, marginTop:14 }}>
-          {/* Primary stat — THIS WEEK */}
-          <div style={{ marginRight:20 }}>
-            <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:48, lineHeight:1, color: thisWeekSessions.length >= targetDays ? "var(--green)" : "var(--amber)" }}>{thisWeekSessions.length}</div>
-            <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", marginTop:3 }}>THIS WEEK</div>
+      {/* ── Stats block ── */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)", marginBottom:6 }}>{today2.toUpperCase()}</div>
+
+        {/* Primary stat + mesocycle dots */}
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+          <div>
+            <div style={S.h1}>Ready to <span style={{ color:"var(--amber)" }}>Train?</span></div>
+            <div style={{ display:"flex", alignItems:"baseline", gap:5, marginTop:10 }}>
+              <span style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:52, lineHeight:1, color: thisWeekSessions.length >= targetDays ? "var(--green)" : "var(--amber)" }}>{thisWeekSessions.length}</span>
+              <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:22, color:"var(--border)" }}>/{targetDays}</span>
+            </div>
+            <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", marginTop:3 }}>
+              SESSIONS{thisWeekVol > 0 ? ` · ${Math.round(thisWeekVol).toLocaleString()}KG VOL` : ""}
+            </div>
           </div>
-          {/* Divider */}
-          <div style={{ width:1, height:36, background:"var(--border)", marginRight:20, marginBottom:14 }} />
-          {/* Supporting stats */}
-          <div style={{ display:"flex", gap:16, paddingBottom:2 }}>
-            <div>
-              <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18, color:"var(--muted)" }}>{targetDays}</div>
-              <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>TARGET</div>
+
+          {/* Mesocycle dot progress */}
+          <div style={{ textAlign:"right", paddingTop:2 }}>
+            <div style={{ fontFamily:"var(--font-m)", fontSize:8, color:phaseColor(meso.phase), letterSpacing:1, marginBottom:5 }}>{phaseLabel(meso.phase)}</div>
+            <div style={{ display:"flex", gap:3, flexWrap:"wrap", maxWidth:88, justifyContent:"flex-end" }}>
+              {Array.from({ length: phaseLen }).map((_, i) => (
+                <div key={i} style={{ width:7, height:7, borderRadius:"50%", background: i < meso.sessionCount ? phaseColor(meso.phase) : "var(--bg3)", border: i < meso.sessionCount ? "none" : "1px solid var(--border)" }} />
+              ))}
             </div>
-            <div>
-              <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18, color:"var(--muted)" }}>{history.length}</div>
-              <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>TOTAL</div>
-            </div>
-            {lastBW && (
-              <div>
-                <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18, color:"var(--muted)" }}>{lastBW.weight}</div>
-                <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>KG</div>
-              </div>
-            )}
+            <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", marginTop:4 }}>{meso.sessionCount}/{phaseLen}</div>
           </div>
         </div>
+
+        {/* Volume bar chart — 6 weeks */}
+        {history.length > 0 && (() => {
+          const maxVol = Math.max(...weeklyVols.map(w => w.vol), 1);
+          return (
+            <div style={{ marginTop:18 }}>
+              <div style={{ display:"flex", alignItems:"flex-end", gap:3, height:40 }}>
+                {weeklyVols.map((w, i) => {
+                  const pct = w.vol > 0 ? Math.max((w.vol / maxVol) * 100, 10) : 0;
+                  return (
+                    <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-end", height:"100%" }}>
+                      <div style={{ width:"100%", borderRadius:"2px 2px 0 0",
+                        height: pct > 0 ? `${pct}%` : 2,
+                        background: w.isCurrent
+                          ? (thisWeekSessions.length >= targetDays ? "var(--green)" : "var(--amber)")
+                          : "var(--bg4)",
+                        opacity: w.isCurrent ? 1 : 0.8 }} />
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ height:1, background:"var(--border)" }} />
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:5 }}>
+                <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>6 WEEKS</div>
+                <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                  {volDelta !== null && (
+                    <span style={{ fontFamily:"var(--font-m)", fontSize:9, color: volDelta >= 0 ? "var(--green)" : "var(--red)" }}>
+                      {volDelta >= 0 ? "↑" : "↓"}{Math.abs(volDelta)}% vs last week
+                    </span>
+                  )}
+                  {recentPR && (
+                    <span style={{ ...S.tag("var(--amber)"), fontSize:9, padding:"3px 7px" }}>
+                      🏆 {recentPR.name.split(" ").pop()} {recentPR.weight}kg{recentPR.reps ? `×${recentPR.reps}` : ""}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* BW sparkline */}
+        {bwRecent.length >= 2 && (
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:12 }}>
+            <BWSparkline data={bwRecent} />
+            <div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+                <span style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--text)" }}>{lastBW?.weight}kg</span>
+                {bwDelta !== 0 && (
+                  <span style={{ fontFamily:"var(--font-m)", fontSize:9, color: bwDelta > 0 ? "var(--amber)" : "var(--green)" }}>
+                    {bwDelta > 0 ? "+" : ""}{bwDelta}kg
+                  </span>
+                )}
+              </div>
+              <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>BODY WEIGHT</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Weekly body weight prompt */}
