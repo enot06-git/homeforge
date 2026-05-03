@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, Component } from "react";
 
 // ── Global styles ─────────────────────────────────────────────────────────────
 const GLOBAL_STYLE = `
@@ -817,6 +817,25 @@ const S = {
   success: { background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: 6, padding: "8px 12px", marginBottom: 8, fontFamily: "var(--font-m)", fontSize: 12, color: "var(--green)" },
 };
 
+// ── Workout error boundary ────────────────────────────────────────────────────
+class WorkoutErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) return (
+      <div style={{ padding: "40px 20px", textAlign: "center" }}>
+        <div style={{ fontFamily: "var(--font-h)", fontWeight: 900, fontSize: 22, color: "var(--red)", marginBottom: 8 }}>WORKOUT ERROR</div>
+        <div style={{ fontFamily: "var(--font-m)", fontSize: 12, color: "var(--muted)", marginBottom: 20 }}>
+          {this.state.error.message || "Something went wrong."}<br />Your session data is preserved.
+        </div>
+        <button style={{ background: "var(--amber)", color: "var(--on-accent)", border: "none", borderRadius: 6, padding: "11px 20px", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 14, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" }}
+          onClick={() => this.setState({ error: null })}>Retry</button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
 // ── BW Sparkline ─────────────────────────────────────────────────────────────
 function BWSparkline({ data }) {
   if (!data || data.length < 2) return null;
@@ -910,10 +929,10 @@ function EquipmentScreen({ data, setData, onNext }) {
       {hasDumbbells && (
         <div style={{ ...S.card, marginBottom: 10 }}>
           <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 15, color: "var(--amber)", marginBottom: 10 }}>Dumbbell Details</div>
-          <label style={S.label}>ALL WEIGHTS AVAILABLE (kg) — comma separated</label>
-          <input style={{ ...S.input, marginBottom: 10 }} placeholder="e.g. 1, 2, 4.5, 8, 16, 24" value={data.dumbbellWeights || ""} onChange={e => setData(d => ({ ...d, dumbbellWeights: e.target.value }))} />
-          <label style={S.label}>MAX SINGLE DUMBBELL (kg)</label>
-          <input style={S.input} type="number" placeholder="e.g. 24" value={data.dumbbellMax || ""} onChange={e => setData(d => ({ ...d, dumbbellMax: e.target.value }))} />
+          <label htmlFor="dbWeights" style={S.label}>ALL WEIGHTS AVAILABLE (kg) — comma separated</label>
+          <input id="dbWeights" style={{ ...S.input, marginBottom: 10 }} placeholder="e.g. 1, 2, 4.5, 8, 16, 24" value={data.dumbbellWeights || ""} onChange={e => setData(d => ({ ...d, dumbbellWeights: e.target.value }))} />
+          <label htmlFor="dbMax" style={S.label}>MAX SINGLE DUMBBELL (kg)</label>
+          <input id="dbMax" style={S.input} type="number" placeholder="e.g. 24" value={data.dumbbellMax || ""} onChange={e => setData(d => ({ ...d, dumbbellMax: e.target.value }))} />
         </div>
       )}
 
@@ -922,22 +941,22 @@ function EquipmentScreen({ data, setData, onNext }) {
           <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 15, color: "var(--amber)", marginBottom: 10 }}>Barbell Setup</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
             <div>
-              <label style={S.label}>BAR TYPE</label>
-              <select style={S.input} value={data.barType || "standard"} onChange={e => setData(d => ({ ...d, barType: e.target.value, barWeight: e.target.value === "standard" ? "20" : e.target.value === "women" ? "15" : e.target.value === "ez" ? "10" : d.barWeight }))}>
+              <label htmlFor="barType" style={S.label}>BAR TYPE</label>
+              <select id="barType" style={S.input} value={data.barType || "standard"} onChange={e => setData(d => ({ ...d, barType: e.target.value, barWeight: e.target.value === "standard" ? "20" : e.target.value === "women" ? "15" : e.target.value === "ez" ? "10" : d.barWeight }))}>
                 <option value="standard">Standard (20kg)</option>
                 <option value="women">Women's (15kg)</option>
                 <option value="custom">Custom</option>
               </select>
             </div>
             <div>
-              <label style={S.label}>BAR WEIGHT (kg)</label>
-              <input style={S.input} type="number" placeholder="e.g. 14" value={data.barWeight || ""} onChange={e => setData(d => ({ ...d, barWeight: e.target.value }))} />
+              <label htmlFor="barWeight" style={S.label}>BAR WEIGHT (kg)</label>
+              <input id="barWeight" style={S.input} type="number" placeholder="e.g. 14" value={data.barWeight || ""} onChange={e => setData(d => ({ ...d, barWeight: e.target.value }))} />
             </div>
           </div>
-          <label style={S.label}>PLATES (pairs available)</label>
-          <input style={{ ...S.input, marginBottom: 8 }} placeholder="e.g. 2x20, 2x10, 2x5, 2x2.5" value={data.barbellPlates || ""} onChange={e => setData(d => ({ ...d, barbellPlates: e.target.value }))} />
-          <label style={S.label}>MAX TOTAL LOADED WEIGHT (kg)</label>
-          <input style={S.input} type="number" placeholder="e.g. 119" value={data.barbellMax || ""} onChange={e => setData(d => ({ ...d, barbellMax: e.target.value }))} />
+          <label htmlFor="barbellPlates" style={S.label}>PLATES (pairs available)</label>
+          <input id="barbellPlates" style={{ ...S.input, marginBottom: 8 }} placeholder="e.g. 2x20, 2x10, 2x5, 2x2.5" value={data.barbellPlates || ""} onChange={e => setData(d => ({ ...d, barbellPlates: e.target.value }))} />
+          <label htmlFor="barbellMax" style={S.label}>MAX TOTAL LOADED WEIGHT (kg)</label>
+          <input id="barbellMax" style={S.input} type="number" placeholder="e.g. 119" value={data.barbellMax || ""} onChange={e => setData(d => ({ ...d, barbellMax: e.target.value }))} />
         </div>
       )}
 
@@ -945,24 +964,24 @@ function EquipmentScreen({ data, setData, onNext }) {
         <div style={{ ...S.card, marginBottom: 10 }}>
           <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 15, color: "var(--amber)", marginBottom: 10 }}>Dip Belt Setup</div>
           <div style={{ ...S.info, marginBottom: 8 }}>Hang Olympic plates from the chain. Add weight to pull-ups, chin-ups, dips and push-ups.</div>
-          <label style={S.label}>MAX PLATE WEIGHT YOU CAN ATTACH (kg)</label>
-          <input style={S.input} type="number" placeholder="e.g. 20" value={data.dipbeltMax || ""} onChange={e => setData(d => ({ ...d, dipbeltMax: e.target.value }))} />
+          <label htmlFor="dipbeltMax" style={S.label}>MAX PLATE WEIGHT YOU CAN ATTACH (kg)</label>
+          <input id="dipbeltMax" style={S.input} type="number" placeholder="e.g. 20" value={data.dipbeltMax || ""} onChange={e => setData(d => ({ ...d, dipbeltMax: e.target.value }))} />
         </div>
       )}
         <div style={{ ...S.card, marginBottom: 10 }}>
           <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 15, color: "var(--amber)", marginBottom: 10 }}>EZ Curl Bar Setup</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
             <div>
-              <label style={S.label}>BAR WEIGHT (kg)</label>
-              <input style={S.input} type="number" placeholder="e.g. 8" value={data.ezbarWeight || ""} onChange={e => setData(d => ({ ...d, ezbarWeight: e.target.value }))} />
+              <label htmlFor="ezbarWeight" style={S.label}>BAR WEIGHT (kg)</label>
+              <input id="ezbarWeight" style={S.input} type="number" placeholder="e.g. 8" value={data.ezbarWeight || ""} onChange={e => setData(d => ({ ...d, ezbarWeight: e.target.value }))} />
             </div>
             <div>
-              <label style={S.label}>MAX LOADED (kg)</label>
-              <input style={S.input} type="number" placeholder="e.g. 113" value={data.ezbarMax || ""} onChange={e => setData(d => ({ ...d, ezbarMax: e.target.value }))} />
+              <label htmlFor="ezbarMax" style={S.label}>MAX LOADED (kg)</label>
+              <input id="ezbarMax" style={S.input} type="number" placeholder="e.g. 113" value={data.ezbarMax || ""} onChange={e => setData(d => ({ ...d, ezbarMax: e.target.value }))} />
             </div>
           </div>
-          <label style={S.label}>PLATES (same as barbell)</label>
-          <input style={S.input} placeholder="e.g. 2x20, 2x10, 2x5, 2x2.5" value={data.ezbarPlates || ""} onChange={e => setData(d => ({ ...d, ezbarPlates: e.target.value }))} />
+          <label htmlFor="ezbarPlates" style={S.label}>PLATES (same as barbell)</label>
+          <input id="ezbarPlates" style={S.input} placeholder="e.g. 2x20, 2x10, 2x5, 2x2.5" value={data.ezbarPlates || ""} onChange={e => setData(d => ({ ...d, ezbarPlates: e.target.value }))} />
         </div>
       )}
 
@@ -992,15 +1011,15 @@ function ProfileScreen({ data, setData, onNext, onBack }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
         {[["AGE","age","32"],["DAYS/WEEK","days","1-7"],["WEIGHT (kg)","weight","80"],["HEIGHT (cm)","height","178"]].map(([l,k,p]) => (
           <div key={k}>
-            <label style={S.label}>{l}</label>
-            <input style={S.input} type="number" placeholder={p} value={data[k] || ""} onChange={e => set(k, e.target.value)} />
+            <label htmlFor={`profile-${k}`} style={S.label}>{l}</label>
+            <input id={`profile-${k}`} style={S.input} type="number" placeholder={p} value={data[k] || ""} onChange={e => set(k, e.target.value)} />
           </div>
         ))}
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <label style={S.label}>BODY WEIGHT FOR LOG (kg) — tracked over time</label>
-        <input style={S.input} type="number" placeholder="e.g. 82.5" value={data.bodyWeight || ""} onChange={e => set("bodyWeight", e.target.value)} />
+        <label htmlFor="profile-bodyWeight" style={S.label}>BODY WEIGHT FOR LOG (kg) — tracked over time</label>
+        <input id="profile-bodyWeight" style={S.input} type="number" placeholder="e.g. 82.5" value={data.bodyWeight || ""} onChange={e => set("bodyWeight", e.target.value)} />
       </div>
 
       {bmi && <div style={{ ...S.info, color: bmiColor, marginBottom: 10 }}>BMI {bmi} - {bmiLabel}</div>}
@@ -1035,13 +1054,13 @@ function ProfileScreen({ data, setData, onNext, onBack }) {
               <div style={{ display: "grid", gridTemplateColumns: ref.type === "weight" ? "1fr 1fr" : "1fr", gap: 8 }}>
                 {ref.type === "weight" && (
                   <div>
-                    <label style={S.label}>WEIGHT (kg)</label>
-                    <input style={S.input} type="number" placeholder="e.g. 60" value={data.profileBaseline?.[ref.name]?.weight || ""} onChange={e => setBaseline(ref.name, "weight", e.target.value)} />
+                    <label htmlFor={`bl-${ref.name}-w`} style={S.label}>WEIGHT (kg)</label>
+                    <input id={`bl-${ref.name}-w`} style={S.input} type="number" placeholder="e.g. 60" value={data.profileBaseline?.[ref.name]?.weight || ""} onChange={e => setBaseline(ref.name, "weight", e.target.value)} />
                   </div>
                 )}
                 <div>
-                  <label style={S.label}>{ref.type === "reps" ? "MAX REPS" : "REPS AT THAT WEIGHT"}</label>
-                  <input style={S.input} type="number" placeholder={ref.type === "reps" ? "e.g. 20" : "e.g. 8"} value={data.profileBaseline?.[ref.name]?.reps || ""} onChange={e => setBaseline(ref.name, "reps", e.target.value)} />
+                  <label htmlFor={`bl-${ref.name}-r`} style={S.label}>{ref.type === "reps" ? "MAX REPS" : "REPS AT THAT WEIGHT"}</label>
+                  <input id={`bl-${ref.name}-r`} style={S.input} type="number" placeholder={ref.type === "reps" ? "e.g. 20" : "e.g. 8"} value={data.profileBaseline?.[ref.name]?.reps || ""} onChange={e => setBaseline(ref.name, "reps", e.target.value)} />
                 </div>
               </div>
             </div>
@@ -1489,11 +1508,11 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
                 <div key={i} style={{ marginBottom:8 }}>
                   <div style={{ display:"flex", gap:5, alignItems:"center" }}>
                     <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", width:20 }}>S{i+1}</span>
-                    <input style={{ ...S.input, flex:2, padding:"7px 8px" }} type="number"
+                    <input style={{ ...S.input, flex:2 }} type="number"
                       placeholder={String(timedSec)} value={set.seconds||""}
                       onChange={e => updateSet(i,"seconds",e.target.value)} />
                     <span style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)" }}>sec</span>
-                    <input style={{ ...S.input, flex:1, padding:"7px 8px", borderColor:rirColor(set.rpe) }} type="number"
+                    <input style={{ ...S.input, flex:1, borderColor:rirColor(set.rpe) }} type="number"
                       min="1" max="10" placeholder="RIR" value={set.rpe||""}
                       onChange={e => updateSet(i,"rpe",e.target.value)} />
                     {secs > 0 && (
@@ -1514,17 +1533,17 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
                   <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", width:20 }}>S{i+1}</span>
                   {!repOverride && (
                     <>
-                      <input style={{ ...S.input, flex:2, padding:"7px 8px" }} type="number"
+                      <input style={{ ...S.input, flex:2 }} type="number"
                         placeholder={suggestion?.weight || "kg"} value={set.weight||""}
                         onChange={e => updateSet(i,"weight",e.target.value)} />
                       <span style={{ color:"var(--muted)", fontSize:11 }}>×</span>
                     </>
                   )}
-                  <input style={{ ...S.input, flex:1.5, padding:"7px 8px" }} type="number"
+                  <input style={{ ...S.input, flex:1.5 }} type="number"
                     placeholder={effectiveReps} value={set.reps||""}
                     onChange={e => updateSet(i,"reps",e.target.value)} />
                   {!repsOnly && (
-                    <input style={{ ...S.input, flex:1, padding:"7px 8px", borderColor:rirColor(set.rpe) }} type="number"
+                    <input style={{ ...S.input, flex:1, borderColor:rirColor(set.rpe) }} type="number"
                     min="1" max="10" placeholder="RIR" value={set.rpe||""}
                     onChange={e => updateSet(i,"rpe",e.target.value)} />
                   )}
@@ -2993,7 +3012,7 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
             <div style={S.h1}>Ready to <span style={{ color:"var(--amber)" }}>Train?</span></div>
             <div style={{ display:"flex", alignItems:"baseline", gap:5, marginTop:10 }}>
               <span style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:52, lineHeight:1, color: thisWeekSessions.length >= targetDays ? "var(--green)" : "var(--amber)" }}>{thisWeekSessions.length}</span>
-              <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:22, color:"var(--border)" }}>/{targetDays}</span>
+              <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:22, color:"var(--muted)" }}>/{targetDays}</span>
             </div>
             <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", marginTop:3 }}>
               SESSIONS{thisWeekVol > 0 ? ` · ${Math.round(thisWeekVol).toLocaleString()}KG VOL` : ""}
@@ -3005,7 +3024,7 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
             <div style={{ fontFamily:"var(--font-m)", fontSize:8, color:phaseColor(meso.phase), letterSpacing:1, marginBottom:5 }}>{phaseLabel(meso.phase)}</div>
             <div style={{ display:"flex", gap:3, flexWrap:"wrap", maxWidth:88, justifyContent:"flex-end" }}>
               {Array.from({ length: phaseLen }).map((_, i) => (
-                <div key={i} style={{ width:7, height:7, borderRadius:"50%", background: i < meso.sessionCount ? phaseColor(meso.phase) : "var(--bg3)", border: i < meso.sessionCount ? "none" : "1px solid var(--border)" }} />
+                <div key={i} style={{ width:7, height:7, borderRadius:"50%", background: i < meso.sessionCount ? phaseColor(meso.phase) : "transparent", border: i < meso.sessionCount ? "none" : "1px solid var(--muted)" }} />
               ))}
             </div>
             <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", marginTop:4 }}>{meso.sessionCount}/{phaseLen}</div>
@@ -3059,11 +3078,17 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
             <div>
               <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
                 <span style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--text)" }}>{lastBW?.weight}kg</span>
-                {bwDelta !== 0 && (
-                  <span style={{ fontFamily:"var(--font-m)", fontSize:9, color: bwDelta > 0 ? "var(--amber)" : "var(--green)" }}>
-                    {bwDelta > 0 ? "+" : ""}{bwDelta}kg
-                  </span>
-                )}
+                {bwDelta !== 0 && (() => {
+                  const gainIsGood = ["hypertrophy","strength"].includes(data.goal);
+                  const col = bwDelta > 0
+                    ? (gainIsGood ? "var(--green)" : "var(--amber)")
+                    : (gainIsGood ? "var(--amber)" : "var(--green)");
+                  return (
+                    <span style={{ fontFamily:"var(--font-m)", fontSize:9, color: col }}>
+                      {bwDelta > 0 ? "+" : ""}{bwDelta}kg
+                    </span>
+                  );
+                })()}
               </div>
               <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>BODY WEIGHT</div>
             </div>
@@ -3381,7 +3406,7 @@ export default function App() {
       {step === 3 && (
         <>
           {tab === "home"     && <HomeScreen    data={data} setData={setData} onStartSession={() => setTab("workout")} onGoToTab={setTab} />}
-          {tab === "workout"  && <WorkoutScreen data={data} setData={setData} onBack={() => setTab("home")} setSyncStatus={setSyncStatus} />}
+          {tab === "workout"  && <WorkoutErrorBoundary><WorkoutScreen data={data} setData={setData} onBack={() => setTab("home")} setSyncStatus={setSyncStatus} /></WorkoutErrorBoundary>}
           {tab === "calendar" && <CalendarScreen data={data} setData={setData} />}
           {tab === "stats"    && <StatsScreen    data={data} />}
           {tab === "chat"     && <ChatScreen     data={data} />}
