@@ -755,12 +755,13 @@ const S = {
   page: { minHeight: "100vh", background: "var(--bg)", paddingBottom: 80 },
   header: { background: "var(--bg2)", borderBottom: "1px solid var(--border)", padding: "14px 20px", display: "flex", alignItems: "center", position: "sticky", top: 0, zIndex: 100 },
   logo: { fontFamily: "var(--font-h)", fontWeight: 900, fontSize: 22, color: "var(--amber)", letterSpacing: 2, textTransform: "uppercase" },
-  section: { padding: "20px 20px 0", animation: "fadeUp .3s ease both" },
+  section: { padding: "24px 20px 0", animation: "fadeUp .3s ease both" },
   h1: { fontFamily: "var(--font-h)", fontWeight: 900, fontSize: 30, letterSpacing: 1, textTransform: "uppercase", marginBottom: 2 },
-  h2: { fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 16, letterSpacing: 1, textTransform: "uppercase", color: "var(--amber)", marginBottom: 10, marginTop: 18 },
-  sub: { color: "var(--muted)", fontSize: 11, marginBottom: 16, fontFamily: "var(--font-m)" },
-  card: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 10 },
-  cardRaised: { background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 10 },
+  h2: { fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 16, letterSpacing: 1, textTransform: "uppercase", color: "var(--amber)", marginBottom: 10, marginTop: 32 },
+  sub: { color: "var(--muted)", fontSize: 11, marginBottom: 20, fontFamily: "var(--font-m)" },
+  card: { background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 8 },
+  cardRaised: { background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, marginBottom: 8 },
+  divider: { height: 1, background: "var(--border)", margin: "16px 0" },
   btn: { background: "var(--amber)", color: "var(--on-accent)", border: "none", borderRadius: 6, padding: "11px 18px", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 14, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8 },
   btnOutline: { background: "transparent", color: "var(--amber)", border: "1px solid var(--amber)", borderRadius: 6, padding: "7px 13px", fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 12, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer" },
   btnSm: { background: "var(--bg3)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: 4, padding: "10px 14px", fontFamily: "var(--font-m)", fontSize: 11, cursor: "pointer", minHeight: 44, display: "inline-flex", alignItems: "center" },
@@ -1025,8 +1026,8 @@ function ScheduleScreen({ data, setData, onNext }) {
       {split.map((day, i) => {
         const warnings = getMuscleWarnings(day, data.history);
         return (
-          <div key={i} style={{ ...S.card, display: "flex", alignItems: "flex-start", gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: day === "REST" ? "var(--bg3)" : "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-h)", fontWeight: 900, fontSize: 12, color: "var(--amber)", flexShrink: 0, marginTop: 2 }}>D{i+1}</div>
+          <div key={i} style={{ ...S.card, display: "flex", alignItems: "center", gap: 12, padding: "12px 14px" }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: day === "REST" ? "var(--bg3)" : "rgba(245,158,11,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-h)", fontWeight: 900, fontSize: 12, color: "var(--amber)", flexShrink: 0 }}>D{i+1}</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 16 }}>{day}</div>
               <div style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--muted)" }}>{(SPLIT_MAP[day]||[]).join(" - ") || "Recovery day"}</div>
@@ -1396,7 +1397,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
 
       {/* ── Expanded log section ── */}
       {expanded && (
-        <div style={{ animation:"fadeUp .2s ease both", borderTop:"1px solid var(--border)", paddingTop:12, marginTop:4 }}>
+        <div style={{ animation:"fadeUp .2s ease both", borderTop:"1px solid var(--border)", paddingTop:14, marginTop:8 }}>
           {!isTimed && warmupSets.length > 0 && (
             <div style={{ marginBottom:10 }}>
               <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--blue)", marginBottom:6, letterSpacing:1 }}>WARM-UP SETS</div>
@@ -1669,7 +1670,7 @@ function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
         </div>
       )}
 
-      <div style={{ ...S.card, marginBottom:12, border:"1px solid rgba(59,130,246,0.3)" }}>
+      <div style={{ ...S.card, marginBottom:20, border:"1px solid rgba(59,130,246,0.3)" }}>
         <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:13, color:"var(--blue)", marginBottom:8 }}>
           WARM-UP {age>=40?"(40+ Extended)":""}
         </div>
@@ -1684,7 +1685,7 @@ function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
         <ExerciseCard key={`${ex.name}-${i}`} ex={ex} exNum={i+1} totalEx={exercises.length} goal={data.goal} data={data} sessionLog={sessionLog} setSessionLog={setSessionLog} history={data.history} />
       ))}
 
-      <div style={{ ...S.card, marginTop:8 }}>
+      <div style={{ ...S.card, marginTop:16 }}>
         <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14, marginBottom:10 }}>SESSION DEBRIEF</div>
         <label style={S.label}>RATING (1-5)</label>
         <div style={{ display:"flex", gap:6, marginBottom:10 }}>
@@ -1811,7 +1812,7 @@ function HistoryScreen({ data }) {
       )}
 
       {last8.length > 1 && (
-        <div style={{ ...S.card, marginBottom: 10 }}>
+        <div style={{ ...S.card, marginBottom: 20 }}>
           <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 14, marginBottom: 10, color: "var(--amber)" }}>VOLUME TREND</div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 44 }}>
             {last8.map((h,i) => {
@@ -2914,25 +2915,31 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)", marginBottom:4 }}>{today2.toUpperCase()}</div>
         <div style={S.h1}>Ready to <span style={{ color:"var(--amber)" }}>Train?</span></div>
-        <div style={{ display:"flex", gap:16, marginTop:10 }}>
-          <div style={{ textAlign:"center" }}>
-            <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:24, color:"var(--amber)" }}>{thisWeekSessions.length}</div>
-            <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>THIS WEEK</div>
+        <div style={{ display:"flex", alignItems:"flex-end", gap:0, marginTop:14 }}>
+          {/* Primary stat — THIS WEEK */}
+          <div style={{ marginRight:20 }}>
+            <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:48, lineHeight:1, color: thisWeekSessions.length >= targetDays ? "var(--green)" : "var(--amber)" }}>{thisWeekSessions.length}</div>
+            <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", marginTop:3 }}>THIS WEEK</div>
           </div>
-          <div style={{ textAlign:"center" }}>
-            <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:24, color: thisWeekSessions.length >= targetDays ? "var(--green)" : "var(--text)" }}>{targetDays}</div>
-            <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>TARGET</div>
-          </div>
-          <div style={{ textAlign:"center" }}>
-            <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:24, color:"var(--blue)" }}>{history.length}</div>
-            <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>TOTAL</div>
-          </div>
-          {lastBW && (
-            <div style={{ textAlign:"center" }}>
-              <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:24, color:"var(--muted)" }}>{lastBW.weight}</div>
-              <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>KG BW</div>
+          {/* Divider */}
+          <div style={{ width:1, height:36, background:"var(--border)", marginRight:20, marginBottom:14 }} />
+          {/* Supporting stats */}
+          <div style={{ display:"flex", gap:16, paddingBottom:2 }}>
+            <div>
+              <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18, color:"var(--muted)" }}>{targetDays}</div>
+              <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>TARGET</div>
             </div>
-          )}
+            <div>
+              <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18, color:"var(--muted)" }}>{history.length}</div>
+              <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>TOTAL</div>
+            </div>
+            {lastBW && (
+              <div>
+                <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18, color:"var(--muted)" }}>{lastBW.weight}</div>
+                <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>KG</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -3088,7 +3095,7 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
       {lastSession && (
         <>
           <div style={S.h2}>Last Session</div>
-          <div style={S.card} onClick={() => onGoToTab("history")} >
+          <div style={{ ...S.card, cursor:"pointer" }} onClick={() => onGoToTab("history")}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
               <div>
                 <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18 }}>{lastSession.day}</div>
