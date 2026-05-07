@@ -16,6 +16,8 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
 ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg2);}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
 @keyframes spin{to{transform:rotate(360deg);}}
+@keyframes barRise{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes barGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
 `;
 const injectStyle = () => {
@@ -259,6 +261,40 @@ const REFERENCE_EXERCISES = [
   { name:"EZ Bar Curl",         eq:"ezbar",       type:"weight" },
   { name:"EZ Bar Skull Crusher",eq:"ezbar",       type:"weight" },
 ];
+
+// ── Exercise → primary muscle group lookup ────────────────────────────────────
+const EXERCISE_TO_MUSCLE_GROUP = (() => {
+  const map = {};
+  Object.values(EXERCISE_DB).flat().forEach(ex => {
+    const m = ex.muscle.toLowerCase();
+    let g = "core";
+    if (m.includes("chest"))                        g = "chest";
+    else if (m.includes("back") || m.includes("posterior") || m.includes("lat")) g = "back";
+    else if (m.includes("shoulder") || m.includes("delt") || m.includes("trap")) g = "shoulders";
+    else if (m.includes("bicep"))                   g = "biceps";
+    else if (m.includes("tricep"))                  g = "triceps";
+    else if (m.includes("quad"))                    g = "quads";
+    else if (m.includes("hamstring"))               g = "hamstrings";
+    else if (m.includes("glute"))                   g = "glutes";
+    else if (m.includes("calf") || m.includes("calve")) g = "calves";
+    map[ex.name] = g;
+  });
+  return map;
+})();
+
+// RP-derived MEV (min effective volume) and MRV (max recoverable volume) per week in sets
+const MRV_TARGETS = {
+  chest:      { mev: 8,  mrv: 22 },
+  back:       { mev: 10, mrv: 25 },
+  shoulders:  { mev: 8,  mrv: 22 },
+  biceps:     { mev: 6,  mrv: 20 },
+  triceps:    { mev: 6,  mrv: 18 },
+  quads:      { mev: 8,  mrv: 20 },
+  hamstrings: { mev: 6,  mrv: 16 },
+  glutes:     { mev: 4,  mrv: 16 },
+  calves:     { mev: 6,  mrv: 16 },
+  core:       { mev: 6,  mrv: 16 },
+};
 
 // ── Ordered Day Templates — correct exercise sequence per coaching principles ──
 // Each entry: exercise name + fallback alternatives if equipment missing
@@ -620,6 +656,67 @@ function shouldDeload(history) {
   return weeks >= 4 && history.length >= 12;
 }
 
+// ── RP-style muscle volume & fatigue helpers ──────────────────────────────────
+
+// Working sets per muscle group for a given list of sessions
+function getMuscleWeeklySets(sessions) {
+  const counts = {};
+  (sessions || []).forEach(h => {
+    Object.entries(h.log || {}).forEach(([exName, sets]) => {
+      const muscle = EXERCISE_TO_MUSCLE_GROUP[exName] || "core";
+      const working = sets.filter(s => s.reps && parseInt(s.reps) > 0).length;
+      counts[muscle] = (counts[muscle] || 0) + working;
+    });
+  });
+  return counts;
+}
+
+// Total volume (kg) per muscle group for a given list of sessions
+function getMuscleVolumeByWeek(sessions) {
+  const vol = {};
+  (sessions || []).forEach(h => {
+    Object.entries(h.log || {}).forEach(([exName, sets]) => {
+      const muscle = EXERCISE_TO_MUSCLE_GROUP[exName] || "core";
+      const exVol = sets.reduce((a, s) => a + (parseFloat(s.weight)||0) * (parseInt(s.reps)||0), 0);
+      vol[muscle] = (vol[muscle] || 0) + exVol;
+    });
+  });
+  return vol;
+}
+
+// Fatigue score 0 (fresh) → 1 (maxed out) derived from recent RIR for a muscle
+function getMuscleRIRFatigue(muscle, history) {
+  const relevant = (history || [])
+    .filter(h => Object.keys(h.log || {}).some(ex => EXERCISE_TO_MUSCLE_GROUP[ex] === muscle))
+    .slice(0, 4);
+  if (!relevant.length) return null;
+  const rirs = relevant.flatMap(h =>
+    Object.entries(h.log || {})
+      .filter(([ex]) => EXERCISE_TO_MUSCLE_GROUP[ex] === muscle)
+      .flatMap(([, sets]) => sets.map(s => parseInt(s.rpe)).filter(r => !isNaN(r) && r >= 0))
+  );
+  if (!rirs.length) return null;
+  const avg = rirs.reduce((a, b) => a + b, 0) / rirs.length;
+  return parseFloat(Math.max(0, Math.min(1, (4 - avg) / 4)).toFixed(2));
+}
+
+// SFR: stimulus (sets × avg_reps) / fatigue load — higher = more efficient exercise
+function getMuscleWeeklySFR(muscle, history, weeklySets) {
+  const sets = weeklySets[muscle] || 0;
+  if (!sets) return null;
+  const recent = (history || [])
+    .filter(h => Object.keys(h.log || {}).some(ex => EXERCISE_TO_MUSCLE_GROUP[ex] === muscle))
+    .slice(0, 3);
+  const allReps = recent.flatMap(h =>
+    Object.entries(h.log || {})
+      .filter(([ex]) => EXERCISE_TO_MUSCLE_GROUP[ex] === muscle)
+      .flatMap(([, ss]) => ss.map(s => parseInt(s.reps)).filter(r => r > 0))
+  );
+  const avgReps = allReps.length ? allReps.reduce((a, b) => a + b, 0) / allReps.length : 10;
+  const fatigue = getMuscleRIRFatigue(muscle, history) ?? 0.5;
+  return parseFloat((sets * avgReps / (1 + fatigue * 3)).toFixed(1));
+}
+
 // ── Claude API ────────────────────────────────────────────────────────────────
 // ── Google Sheets sync ────────────────────────────────────────────────────────
 const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwtUvzbIeE7REyYIrMMTw5Otn1Uvklfvz6VZOgm_z4-Mmkzu33KQE2yD8plbwDt8tE/exec";
@@ -866,6 +963,12 @@ function RestTimer({ seconds }) {
     const t = setTimeout(() => setRemaining(r => r - 1), 1000);
     return () => clearTimeout(t);
   }, [running, remaining]);
+  // Haptic on timer complete
+  useEffect(() => {
+    if (remaining === 0 && running) {
+      if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 600]);
+    }
+  }, [remaining, running]);
   const pct = ((seconds - remaining) / seconds) * 100;
   const fmt = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
   const color = remaining < 10 ? "var(--red)" : "var(--amber)";
@@ -886,7 +989,7 @@ function RestTimer({ seconds }) {
         <div style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--muted)" }}>REST TIMER</div>
         {remaining === 0 && <div style={{ color: "var(--green)", fontSize: 12, fontFamily: "var(--font-h)", fontWeight: 700 }}>GO! Next set</div>}
       </div>
-      <button style={S.btnSm} onClick={() => { if (running) { setRunning(false); setRemaining(seconds); } else { setRemaining(seconds); setRunning(true); } }}>
+      <button style={S.btnSm} onClick={() => { if (running) { setRunning(false); setRemaining(seconds); } else { setRemaining(seconds); setRunning(true); if (navigator.vibrate) navigator.vibrate(50); } }}>
         {running ? "Stop" : "Start"}
       </button>
     </div>
@@ -1162,6 +1265,11 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
 
   const prevSession = (history || []).find(h => h.log?.[key]);
   const prevSets = prevSession?.log?.[key] || [];
+  // Best historical 1RM for live PR detection
+  const bestHistorical1RM = useMemo(() => {
+    const b = getBestRecord(key, history, data.profileBaseline);
+    return b.weight ? calc1RM(b.weight, b.reps) : 0;
+  }, [key, history, data.profileBaseline]);
 
   const updateSet = (i, field, val) => {
     const next = sets.map((s, idx) => idx === i ? { ...s, [field]: val } : s);
@@ -1433,7 +1541,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
           </div>
         )}
         {tip && !loadingTip && !tip.startsWith("__ERROR__:") && (
-          <div style={{ background:"rgba(245,158,11,0.06)", border:"1px solid rgba(245,158,11,0.2)", borderRadius:6, padding:"10px 12px", fontFamily:"var(--font-b)", fontSize:13, lineHeight:1.6, whiteSpace:"pre-wrap", color:"var(--text)", animation:"fadeUp .2s ease both" }}>
+          <div style={{ background:"rgba(245,158,11,0.06)", border:"1px solid rgba(245,158,11,0.2)", borderRadius:6, padding:"10px 12px", fontFamily:"var(--font-b)", fontSize:13, lineHeight:1.6, whiteSpace:"pre-wrap", color:"var(--text)", animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
             {tip}
           </div>
         )}
@@ -1475,7 +1583,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
 
       {/* ── Expanded log section ── */}
       {expanded && (
-        <div style={{ animation:"fadeUp .2s ease both", borderTop:"1px solid var(--border)", paddingTop:14, marginTop:8 }}>
+        <div style={{ animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both", borderTop:"1px solid var(--border)", paddingTop:14, marginTop:8 }}>
           {!isTimed && warmupSets.length > 0 && (
             <div style={{ marginBottom:10 }}>
               <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--blue)", marginBottom:6, letterSpacing:1 }}>WARM-UP SETS</div>
@@ -1534,13 +1642,13 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
                   {!repOverride && (
                     <>
                       <input style={{ ...S.input, flex:2 }} type="number"
-                        placeholder={suggestion?.weight || "kg"} value={set.weight||""}
+                        placeholder={prevSets[i]?.weight || suggestion?.weight || "kg"} value={set.weight||""}
                         onChange={e => updateSet(i,"weight",e.target.value)} />
                       <span style={{ color:"var(--muted)", fontSize:11 }}>×</span>
                     </>
                   )}
                   <input style={{ ...S.input, flex:1.5 }} type="number"
-                    placeholder={effectiveReps} value={set.reps||""}
+                    placeholder={prevSets[i]?.reps || effectiveReps} value={set.reps||""}
                     onChange={e => updateSet(i,"reps",e.target.value)} />
                   {!repsOnly && (
                     <input style={{ ...S.input, flex:1, borderColor:rirColor(set.rpe) }} type="number"
@@ -1551,6 +1659,10 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
                     <span style={{ ...S.tag("var(--green)"), whiteSpace:"nowrap", fontSize:10 }}>
                       {(parseFloat(set.weight)*parseInt(set.reps)).toFixed(0)}kg
                     </span>
+                  )}
+                  {!repOverride && set.weight && set.reps && bestHistorical1RM > 0 &&
+                    calc1RM(parseFloat(set.weight), parseInt(set.reps)) > bestHistorical1RM && (
+                    <span style={{ ...S.tag("var(--amber)"), whiteSpace:"nowrap", fontSize:10 }}>🏆 PR</span>
                   )}
                   {repOverride && !repsOnly && set.reps && (
                     <span style={{ ...S.tag("var(--green)"), whiteSpace:"nowrap", fontSize:10 }}>
@@ -1671,7 +1783,7 @@ function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
         )}
       </div>
       {meso.pendingTransition && (
-        <div style={{ ...S.card, border:"1px solid var(--amber)", marginTop:14, animation:"fadeUp .2s ease both" }}>
+        <div style={{ ...S.card, border:"1px solid var(--amber)", marginTop:14, animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18, color:"var(--amber)", marginBottom:6 }}>
             Phase complete — {meso.sessionCount} {phaseLabel(meso.phase).toLowerCase()} sessions done
           </div>
@@ -1728,7 +1840,7 @@ function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
 
       {trends.length > 0 && (
         <div style={{ background:"rgba(168,85,247,0.08)", border:"1px solid rgba(168,85,247,0.35)",
-          borderRadius:8, padding:"10px 14px", marginBottom:10, animation:"fadeUp .2s ease both" }}>
+          borderRadius:8, padding:"10px 14px", marginBottom:10, animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
             <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:13,
               color:"var(--purple)", letterSpacing:1 }}>📈 TREND ALERT</span>
@@ -2448,7 +2560,7 @@ function CalendarScreen({ data, setData }) {
       </div>
 
       {selectedSession && (
-        <div style={{ ...S.card, border:"1px solid var(--amber)", animation:"fadeUp .2s ease both" }}>
+        <div style={{ ...S.card, border:"1px solid var(--amber)", animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
             <div>
               <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:20 }}>{selectedSession.day}</div>
@@ -2575,6 +2687,30 @@ function StatsScreen({ data }) {
     return { ex, weight: best.weight, reps: best.reps, orm: best.orm, date: best.date };
   }).filter(Boolean).sort((a,b) => b.orm - a.orm).slice(0, 6);
 
+  // Current-week data for MRV panel
+  const thisWeekStart = (() => { const d = new Date(); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); return d; })();
+  const thisWeekHistory = history.filter(h => new Date(h.date) >= thisWeekStart);
+  const weeklySets = getMuscleWeeklySets(thisWeekHistory);
+  const muscleVolThisWeek = getMuscleVolumeByWeek(thisWeekHistory);
+
+  // Count-up number animation for key stats
+  const CountUp = ({ value, suffix="" }) => {
+    const [display, setDisplay] = useState(0);
+    useEffect(() => {
+      if (!value) return;
+      const duration = 550;
+      const start = Date.now();
+      const tick = () => {
+        const t = Math.min((Date.now()-start)/duration, 1);
+        const eased = 1 - Math.pow(2, -10*t);
+        setDisplay(Math.round(value * eased));
+        if (t < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, [value]);
+    return <>{display}{suffix}</>;
+  };
+
   const MiniBar = ({ values, colors, labels, unit="" }) => {
     const max = Math.max(...values.map(v => parseFloat(v)||0), 1);
     return (
@@ -2584,7 +2720,12 @@ function StatsScreen({ data }) {
           return (
             <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2 }}>
               <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>{v}{unit}</div>
-              <div style={{ width:"100%", background: colors?.[i] || "var(--amber)", borderRadius:"2px 2px 0 0", height:pct+"%", minHeight:4, opacity:0.8 }} />
+              <div style={{
+                width:"100%", background: colors?.[i] || "var(--amber)", borderRadius:"2px 2px 0 0",
+                height:pct+"%", minHeight:4, opacity:0.8,
+                animation:"barRise 420ms cubic-bezier(0.16,1,0.3,1) both",
+                animationDelay:`${i*35}ms`, transformOrigin:"bottom center"
+              }} />
               {labels?.[i] && <div style={{ fontFamily:"var(--font-m)", fontSize:8, color:"var(--muted)", textAlign:"center" }}>{labels[i]}</div>}
             </div>
           );
@@ -2594,19 +2735,39 @@ function StatsScreen({ data }) {
   };
 
   const LineChart = ({ points, color="var(--amber)", unit="" }) => {
-    if (points.length < 2) return <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)", padding:"20px 0" }}>Log more sessions to see trend</div>;
+    const pathRef = useRef(null);
     const vals = points.map(p => p.y);
-    const min = Math.min(...vals), max = Math.max(...vals);
+    const min = points.length >= 2 ? Math.min(...vals) : 0;
+    const max = points.length >= 2 ? Math.max(...vals) : 1;
     const range = max - min || 1;
     const W = 300, H = 80;
-    const pts = points.map((p,i) => ({ x: (i/(points.length-1))*W, y: H - ((p.y-min)/range)*(H-10)-5 }));
+    const pts = points.length >= 2
+      ? points.map((p,i) => ({ x:(i/(points.length-1))*W, y:H-((p.y-min)/range)*(H-10)-5 }))
+      : [];
     const path = pts.map((p,i) => `${i===0?"M":"L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+
+    useEffect(() => {
+      const el = pathRef.current;
+      if (!el) return;
+      try {
+        const len = el.getTotalLength();
+        el.style.strokeDasharray = `${len} ${len}`;
+        el.style.strokeDashoffset = `${len}`;
+        el.style.transition = "none";
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          el.style.transition = "stroke-dashoffset 700ms cubic-bezier(0.16,1,0.3,1)";
+          el.style.strokeDashoffset = "0";
+        }));
+      } catch(e) {}
+    }, [path]);
+
+    if (points.length < 2) return <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)", padding:"20px 0" }}>Log more sessions to see trend</div>;
     return (
       <div style={{ overflowX:"auto" }}>
         <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display:"block" }}>
-          <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path ref={pathRef} d={path} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           {pts.map((p,i) => (
-            <g key={i}>
+            <g key={i} style={{ animation:"fadeUp .3s cubic-bezier(0.16,1,0.3,1) both", animationDelay:`${600+i*30}ms` }}>
               <circle cx={p.x} cy={p.y} r="3" fill={color} />
               <text x={p.x} y={H} textAnchor="middle" fontSize="7" fill="var(--muted)">{points[i].label||""}</text>
               <text x={p.x} y={p.y-6} textAnchor="middle" fontSize="8" fill={color}>{points[i].y}{unit}</text>
@@ -2620,6 +2781,7 @@ function StatsScreen({ data }) {
   const panels = [
     { id:"strength", icon:"💪", label:"Strength" },
     { id:"volume",   icon:"📦", label:"Volume"   },
+    { id:"mrv",      icon:"📈", label:"MRV"      },
     { id:"body",     icon:"⚖️",  label:"Body"     },
     { id:"rir",      icon:"🌡️",  label:"RIR"      },
     { id:"prs",      icon:"🏆",  label:"PRs"      },
@@ -2645,7 +2807,7 @@ function StatsScreen({ data }) {
 
       {/* Strength panel */}
       {activePanel === "strength" && (
-        <div style={{ animation:"fadeUp .2s ease both" }}>
+        <div style={{ animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={S.h2}>Strength Curve</div>
           <label style={S.label}>SELECT EXERCISE</label>
           <select style={{ ...S.input, marginBottom:14 }} value={selectedEx} onChange={e => setSelectedEx(e.target.value)}>
@@ -2662,11 +2824,15 @@ function StatsScreen({ data }) {
                 <div style={{ display:"flex", justifyContent:"space-between" }}>
                   <div>
                     <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)" }}>CURRENT BEST</div>
-                    <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:22, color:"var(--amber)" }}>{exH[exH.length-1]?.weight}kg × {exH[exH.length-1]?.reps}</div>
+                    <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:22, color:"var(--amber)" }}>
+                      <CountUp value={exH[exH.length-1]?.weight} suffix="kg" /> × {exH[exH.length-1]?.reps}
+                    </div>
                   </div>
                   <div style={{ textAlign:"right" }}>
                     <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)" }}>EST. 1RM</div>
-                    <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:22, color:"var(--green)" }}>{exH[exH.length-1]?.orm}kg</div>
+                    <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:22, color:"var(--green)" }}>
+                      <CountUp value={exH[exH.length-1]?.orm} suffix="kg" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2681,7 +2847,7 @@ function StatsScreen({ data }) {
 
       {/* Volume panel */}
       {activePanel === "volume" && (
-        <div style={{ animation:"fadeUp .2s ease both" }}>
+        <div style={{ animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={S.h2}>Weekly Volume (kg)</div>
           {weeks.length > 1 ? (
             <MiniBar values={weeks.map(w => Math.round(w.volume))} labels={weeks.map(w => w.week.slice(5))} />
@@ -2700,12 +2866,105 @@ function StatsScreen({ data }) {
               </div>
             </div>
           </div>
+          {Object.keys(muscleVolThisWeek).length > 0 && (
+            <>
+              <div style={S.h2}>This Week by Muscle Group</div>
+              {Object.entries(muscleVolThisWeek)
+                .sort((a,b) => b[1]-a[1])
+                .map(([muscle, vol]) => {
+                  const maxVol = Math.max(...Object.values(muscleVolThisWeek));
+                  const pct = maxVol > 0 ? (vol/maxVol*100) : 0;
+                  return (
+                    <div key={muscle} style={{ marginBottom:8 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                        <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", textTransform:"uppercase" }}>{muscle}</span>
+                        <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--text)" }}>{Math.round(vol).toLocaleString()}kg</span>
+                      </div>
+                      <div style={{ height:5, background:"var(--bg3)", borderRadius:3 }}>
+                        <div style={{ height:"100%", width:`${pct}%`, background:"var(--amber)", borderRadius:3, opacity:0.8,
+                          animation:"barGrow 450ms cubic-bezier(0.16,1,0.3,1) both",
+                          transformOrigin:"left center"
+                        }} />
+                      </div>
+                    </div>
+                  );
+              })}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* MRV / RP panel */}
+      {activePanel === "mrv" && (
+        <div style={{ animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
+          <div style={S.h2}>Weekly Sets vs MRV</div>
+          <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", marginBottom:12 }}>
+            MEV = min effective · MRV = max recoverable · Fatigue from RIR trend · SFR = stimulus/fatigue
+          </div>
+          {Object.entries(MRV_TARGETS).map(([muscle, { mev, mrv }]) => {
+            const sets = weeklySets[muscle] || 0;
+            const fatigue = getMuscleRIRFatigue(muscle, history);
+            const sfr = getMuscleWeeklySFR(muscle, history, weeklySets);
+            const mevPct = (mev/mrv)*100;
+            const setPct = Math.min((sets/mrv)*100, 100);
+            const barColor = sets >= mrv ? "var(--red)" : sets >= mev ? "var(--green)" : sets > 0 ? "var(--amber)" : "var(--bg4)";
+            const fatigueColor = fatigue === null ? "var(--muted)" : fatigue >= 0.75 ? "var(--red)" : fatigue >= 0.45 ? "var(--amber)" : "var(--green)";
+            const fatigueLabel = fatigue === null ? "–" : fatigue >= 0.75 ? "HIGH" : fatigue >= 0.45 ? "MOD" : "LOW";
+            return (
+              <div key={muscle} style={{ ...S.card, marginBottom:8, padding:"12px 14px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
+                  <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14, textTransform:"uppercase" }}>{muscle}</span>
+                  <div style={{ display:"flex", gap:10, alignItems:"baseline" }}>
+                    {sfr !== null && (
+                      <span style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>SFR {sfr}</span>
+                    )}
+                    <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:fatigueColor }}>
+                      {fatigueLabel} fatigue
+                    </span>
+                    <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14, color: barColor }}>{sets}</span>
+                    <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)" }}>/{mrv}</span>
+                  </div>
+                </div>
+                {/* Bar */}
+                <div style={{ position:"relative", height:8, background:"var(--bg3)", borderRadius:4 }}>
+                  {/* Fill */}
+                  <div style={{ position:"absolute", left:0, top:0, height:"100%", width:`${setPct}%`, background:barColor, borderRadius:4,
+                    animation:"barGrow 500ms cubic-bezier(0.16,1,0.3,1) both",
+                    animationDelay:`${Object.keys(MRV_TARGETS).indexOf(muscle)*40}ms`,
+                    transformOrigin:"left center"
+                  }} />
+                  {/* MEV marker */}
+                  <div style={{ position:"absolute", top:"-3px", bottom:"-3px", left:`${mevPct}%`, width:1, background:"var(--muted)", opacity:0.6 }} />
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:3 }}>
+                  <span style={{ fontFamily:"var(--font-m)", fontSize:8, color:"var(--muted)" }}>0</span>
+                  <span style={{ fontFamily:"var(--font-m)", fontSize:8, color:"var(--muted)", marginLeft:`${mevPct}%`, transform:"translateX(-50%)" }}>MEV{mev}</span>
+                  <span style={{ fontFamily:"var(--font-m)", fontSize:8, color:"var(--red)" }}>MRV{mrv}</span>
+                </div>
+                {sets >= mrv && (
+                  <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--red)", marginTop:4 }}>
+                    At or above MRV — risk of junk volume. Consider deload.
+                  </div>
+                )}
+                {fatigue !== null && fatigue >= 0.75 && (
+                  <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--red)", marginTop:2 }}>
+                    RIR trend shows high fatigue for {muscle}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {!Object.values(weeklySets).some(v => v > 0) && (
+            <div style={{ ...S.card, textAlign:"center", padding:24, color:"var(--muted)" }}>
+              No sessions this week yet. Log a session to see MRV tracking.
+            </div>
+          )}
         </div>
       )}
 
       {/* Body weight panel */}
       {activePanel === "body" && (
-        <div style={{ animation:"fadeUp .2s ease both" }}>
+        <div style={{ animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={S.h2}>Body Weight Trend</div>
           {bwHistory.length > 1 ? (
             <>
@@ -2733,7 +2992,7 @@ function StatsScreen({ data }) {
 
       {/* RIR panel */}
       {activePanel === "rir" && (
-        <div style={{ animation:"fadeUp .2s ease both" }}>
+        <div style={{ animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={S.h2}>Average RIR per Session</div>
           {rirHistory.length > 1 ? (
             <>
@@ -2754,10 +3013,10 @@ function StatsScreen({ data }) {
 
       {/* PRs panel */}
       {activePanel === "prs" && (
-        <div style={{ animation:"fadeUp .2s ease both" }}>
+        <div style={{ animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={S.h2}>Personal Records</div>
           {PRs.length > 0 ? PRs.map((pr,i) => (
-            <div key={i} style={{ ...S.card, display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
+            <div key={i} style={{ ...S.card, display:"flex", alignItems:"center", gap:12, marginBottom:8, animation:"fadeUp .28s cubic-bezier(0.16,1,0.3,1) both", animationDelay:`${i*55}ms` }}>
               <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:20, color:"var(--amber)", width:28 }}>#{i+1}</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:15 }}>{pr.ex}</div>
@@ -2774,7 +3033,7 @@ function StatsScreen({ data }) {
 
       {/* Consistency panel */}
       {activePanel === "consist" && (
-        <div style={{ animation:"fadeUp .2s ease both" }}>
+        <div style={{ animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={S.h2}>Consistency</div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
             <div style={{ ...S.card, textAlign:"center", border:"1px solid var(--amber)" }}>
