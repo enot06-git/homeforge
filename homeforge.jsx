@@ -2493,131 +2493,180 @@ function FavouritesScreen({ data, setData, onBack }) {
 
 // ── Calendar Screen ───────────────────────────────────────────────────────────
 function CalendarScreen({ data, setData }) {
-  const [viewDate, setViewDate] = useState(new Date());
-  const [selectedDay, setSelectedDay] = useState(null);
-  const [expandedEx, setExpandedEx] = useState(null);
+  const [expandedSession, setExpandedSession] = useState(null); // "date" key
   const history = data.history || [];
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthName = viewDate.toLocaleString("default", { month: "long", year: "numeric" });
-  const today = new Date().toISOString().slice(0, 10);
-  const sessionByDate = {};
-  history.forEach(h => { sessionByDate[h.date] = h; });
-  const getVolColor = vol => !vol ? null : vol < 2000 ? "var(--blue)" : vol < 5000 ? "var(--amber)" : "var(--red)";
-  const prevMonth = () => setViewDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
-  const nextMonth = () => { const n = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1); if (n <= new Date()) setViewDate(n); };
-  const selectedSession = selectedDay ? sessionByDate[selectedDay] : null;
   const split = data.split || [];
   const lastIdx = history[0] ? split.indexOf(history[0].day) : -1;
   const nextDay = split[(lastIdx + 1) % split.length];
 
+  // Rolling 28-day window, grouped into Mon-starting weeks
+  const now = new Date();
+  const cutoff = new Date(now); cutoff.setDate(now.getDate() - 28); cutoff.setHours(0,0,0,0);
+  const recent = history.filter(h => new Date(h.date) >= cutoff);
+
+  // Group into Mon-starting week buckets
+  const weekMap = {};
+  recent.forEach(h => {
+    const d = new Date(h.date);
+    const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7)); mon.setHours(0,0,0,0);
+    const key = mon.toISOString().slice(0,10);
+    if (!weekMap[key]) weekMap[key] = { mon, sessions: [] };
+    weekMap[key].sessions.push(h);
+  });
+  const weeks = Object.values(weekMap)
+    .sort((a,b) => b.mon - a.mon)
+    .map(w => ({ ...w, sessions: w.sessions.sort((a,b) => new Date(b.date)-new Date(a.date)) }));
+
+  const dayTypeColor = day => {
+    const d = day.toLowerCase();
+    if (d.includes("push") || d.includes("chest") || d.includes("shoulder") || d.includes("arm")) return "var(--amber)";
+    if (d.includes("pull") || d.includes("back")) return "var(--blue)";
+    if (d.includes("leg") || d.includes("lower")) return "var(--green)";
+    return "var(--purple)";
+  };
+
+  const ABBREV = {
+    "Barbell Bench Press":"Bench","Barbell Squat":"Squat","Barbell Deadlift":"DL",
+    "Barbell Row":"Row","Overhead Press":"OHP","Romanian Deadlift":"RDL",
+    "EZ Bar Curl":"EZ Curl","EZ Bar Skull Crusher":"Skull Crusher",
+    "Dumbbell Shoulder Press":"DB Press","Dumbbell Bench Press":"DB Bench",
+    "Dumbbell Row":"DB Row","Dumbbell Fly":"Fly","Weighted Pull-Up":"Pull-Up+",
+    "Weighted Dip":"Dip+","Assisted Pull-Up":"Asst Pull-Up","Single-Arm Dumbbell Row":"DB Row",
+    "Single-Arm DB Press":"DB Press","Close-Grip Bench Press":"CG Bench",
+    "EZ Bar Skull Crusher":"Skull","Bulgarian Split Squat":"Split Squat",
+  };
+  const abbrev = name => ABBREV[name] || name.split(" ").slice(0,2).join(" ");
+
+  const highlights = log => Object.entries(log||{})
+    .map(([name, sets]) => ({
+      name,
+      maxW: Math.max(0, ...sets.map(s => parseFloat(s.weight)||0)),
+      vol:  sets.reduce((a,s) => a+(parseFloat(s.weight)||0)*(parseInt(s.reps)||0), 0),
+    }))
+    .filter(e => e.maxW > 0)
+    .sort((a,b) => b.vol - a.vol)
+    .slice(0, 2);
+
+  const weekLabel = mon => {
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    const fmt = d => d.toLocaleString("default",{month:"short",day:"numeric"}).toUpperCase();
+    return `${fmt(mon)} – ${fmt(sun)}`;
+  };
+  const DOW = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+
   return (
     <div style={S.section}>
-      <div style={S.h1}>Schedule <span style={{ color: "var(--amber)" }}>&amp; Log</span></div>
+      <div style={S.h1}>Training <span style={{ color:"var(--amber)" }}>Log</span></div>
+      <div style={S.sub}>LAST 4 WEEKS · {recent.length} SESSIONS</div>
+
       {nextDay && nextDay !== "REST" && (
-        <div style={{ ...S.card, border: "1px solid var(--green)", marginBottom: 12, display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--green)" }}>NEXT SESSION</div>
-            <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 18 }}>{nextDay}</div>
-            <div style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--muted)" }}>{(SPLIT_MAP[nextDay]||[]).join(" · ")}</div>
+        <div style={{ ...S.card, border:"1px solid var(--green)", marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--green)" }}>NEXT SESSION</div>
+            <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18 }}>{nextDay}</div>
+            <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)" }}>{(SPLIT_MAP[nextDay]||[]).join(" · ")}</div>
           </div>
-          <button style={{ ...S.btnGreen, padding: "8px 14px", fontSize: 13 }} onClick={() => setData(d => ({ ...d, activeDay: nextDay }))}>Start →</button>
+          <button style={{ ...S.btnGreen, padding:"8px 14px", fontSize:13 }}
+            onClick={() => setData(d => ({ ...d, activeDay: nextDay }))}>Start →</button>
         </div>
       )}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <button style={S.btnSm} onClick={prevMonth}>← Prev</button>
-        <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 16, color: "var(--amber)" }}>{monthName}</div>
-        <button style={{ ...S.btnSm, opacity: month === new Date().getMonth() && year === new Date().getFullYear() ? 0.3 : 1 }} onClick={nextMonth}>Next →</button>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4 }}>
-        {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => (
-          <div key={d} style={{ fontFamily: "var(--font-m)", fontSize: 9, color: "var(--muted)", textAlign: "center" }}>{d}</div>
-        ))}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3, marginBottom: 12 }}>
-        {Array.from({ length: firstDay }).map((_,i) => <div key={"e"+i} />)}
-        {Array.from({ length: daysInMonth }).map((_,i) => {
-          const day = i + 1;
-          const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-          const session = sessionByDate[dateStr];
-          const isToday = dateStr === today;
-          const isSelected = dateStr === selectedDay;
-          return (
-            <div key={day} onClick={() => { setSelectedDay(isSelected ? null : dateStr); setExpandedEx(null); }}
-              style={{ aspectRatio:"1", borderRadius:6, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", cursor: session ? "pointer" : "default", background: isSelected ? "rgba(245,158,11,0.2)" : isToday ? "var(--bg3)" : "transparent", border: isToday ? "1px solid var(--amber)" : "1px solid transparent" }}>
-              <span style={{ fontFamily:"var(--font-m)", fontSize:12, color: isToday ? "var(--amber)" : session ? "var(--text)" : "var(--muted)" }}>{day}</span>
-              {session && <div style={{ width:6, height:6, borderRadius:"50%", background: getVolColor(session.volume), marginTop:2 }} />}
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display:"flex", gap:12, marginBottom:14, fontFamily:"var(--font-m)", fontSize:10 }}>
-        <span style={{ color:"var(--blue)" }}>● Light</span>
-        <span style={{ color:"var(--amber)" }}>● Medium</span>
-        <span style={{ color:"var(--red)" }}>● Heavy</span>
-      </div>
 
-      {selectedSession && (
-        <div style={{ ...S.card, border:"1px solid var(--amber)", animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-            <div>
-              <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:20 }}>{selectedSession.day}</div>
-              <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)" }}>{selectedDay} {selectedSession.rating && "· "+"⭐".repeat(parseInt(selectedSession.rating))}</div>
-            </div>
-            <div style={{ textAlign:"right" }}>
-              <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:22, color:"var(--amber)" }}>{(selectedSession.volume||0).toFixed(0)}kg</div>
-              <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>total volume</div>
-            </div>
+      {weeks.length === 0 && (
+        <div style={{ ...S.card, textAlign:"center", padding:36, color:"var(--muted)" }}>
+          <div style={{ fontSize:36, marginBottom:8 }}>📋</div>No sessions in the last 4 weeks.
+        </div>
+      )}
+
+      {weeks.map(({ mon, sessions }) => (
+        <div key={mon.toISOString()} style={{ marginBottom:24 }}>
+          {/* Week header */}
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+            <span style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", letterSpacing:1, flexShrink:0 }}>{weekLabel(mon)}</span>
+            <div style={{ flex:1, height:1, background:"var(--border)" }} />
           </div>
 
-          {Object.entries(selectedSession.log||{}).map(([name, sets]) => {
-            const isOpen = expandedEx === name;
-            const tips = TECHNIQUE[name] || [];
-            const best = sets.filter(s=>s.reps).reduce((a,s) => {
-              const vol = (parseFloat(s.weight)||0)*(parseInt(s.reps)||0);
-              return vol > a.vol ? { vol, weight: s.weight, reps: s.reps } : a;
-            }, { vol:0, weight:0, reps:0 });
+          {sessions.map(session => {
+            const key = session.date + session.day;
+            const isOpen = expandedSession === key;
+            const h = highlights(session.log);
+            const typeColor = dayTypeColor(session.day);
+            const allSets = Object.entries(session.log||{});
+
             return (
-              <div key={name} style={{ marginBottom:8, border:"1px solid var(--border)", borderRadius:8, overflow:"hidden" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", cursor:"pointer", background: isOpen ? "rgba(245,158,11,0.06)" : "transparent" }}
-                  onClick={() => setExpandedEx(isOpen ? null : name)}>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:15 }}>{name}</div>
-                    <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)" }}>
-                      {sets.filter(s=>s.reps).map(s=>`${s.weight||"BW"}×${s.reps}${s.rpe?"RIR"+s.rpe:""}`).join("  |  ")}
+              <div key={key}>
+                {/* Session row */}
+                <div style={{ display:"flex", alignItems:"center", gap:12, padding:"11px 0",
+                  borderBottom: isOpen ? "none" : "1px solid var(--border)", cursor:"pointer" }}
+                  onClick={() => setExpandedSession(isOpen ? null : key)}>
+
+                  {/* Day number */}
+                  <div style={{ width:40, flexShrink:0 }}>
+                    <div style={{ fontFamily:"var(--font-m)", fontSize:8, color:"var(--muted)", letterSpacing:0.5 }}>{DOW[new Date(session.date).getDay()]}</div>
+                    <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:22, color:"var(--text)", lineHeight:1 }}>{parseInt(session.date.slice(8))}</div>
+                  </div>
+
+                  {/* Type chip */}
+                  <div style={{ flexShrink:0, padding:"3px 7px", borderRadius:4,
+                    background:typeColor+"1a", border:`1px solid ${typeColor}44` }}>
+                    <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:10,
+                      color:typeColor, letterSpacing:0.5, textTransform:"uppercase", whiteSpace:"nowrap" }}>
+                      {session.day}
                     </div>
                   </div>
-                  <span style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--amber)" }}>{isOpen ? "▲" : "▼ Tips"}</span>
-                </div>
-                {isOpen && (
-                  <div style={{ padding:"10px 12px", background:"rgba(245,158,11,0.04)", borderTop:"1px solid var(--border)", animation:"fadeUp .15s ease both" }}>
-                    {best.weight > 0 && (
-                      <div style={{ ...S.success, marginBottom:10 }}>
-                        Best set this session: {best.weight}kg × {best.reps} reps · Volume: {best.vol.toFixed(0)}kg
+
+                  {/* Highlights */}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    {h.length > 0 ? (
+                      <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--text)",
+                        whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                        {h.map((e,i) => (
+                          <span key={i}>
+                            {i > 0 && <span style={{ color:"var(--border)", margin:"0 5px" }}>·</span>}
+                            {abbrev(e.name)}&nbsp;<span style={{ color:"var(--amber)" }}>{e.maxW}kg</span>
+                          </span>
+                        ))}
                       </div>
+                    ) : (
+                      <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)" }}>Bodyweight</div>
                     )}
-                    <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:12, color:"var(--amber)", marginBottom:8 }}>TECHNIQUE CUES</div>
-                    {tips.length > 0 ? tips.map((tip,i) => (
-                      <div key={i} style={{ display:"flex", gap:8, marginBottom:6 }}>
-                        <span style={{ color:"var(--amber)", fontFamily:"var(--font-m)", fontSize:12, flexShrink:0 }}>{i+1}.</span>
-                        <span style={{ fontFamily:"var(--font-b)", fontSize:13, lineHeight:1.5, color:"var(--text)" }}>{tip}</span>
-                      </div>
-                    )) : <div style={{ fontFamily:"var(--font-m)", fontSize:12, color:"var(--muted)" }}>No technique notes for this exercise yet.</div>}
+                  </div>
+
+                  {/* Expand indicator */}
+                  <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", flexShrink:0 }}>
+                    {isOpen ? "▲" : "▼"}
+                  </div>
+                </div>
+
+                {/* Expanded detail */}
+                {isOpen && (
+                  <div style={{ padding:"10px 0 14px 52px", borderBottom:"1px solid var(--border)",
+                    animation:"fadeUp .2s cubic-bezier(0.16,1,0.3,1) both" }}>
+                    {allSets.map(([name, sets]) => {
+                      const hasSecs = sets.some(s => s.seconds);
+                      const display = hasSecs
+                        ? sets.filter(s=>s.seconds).map(s=>`${s.seconds}s`).join(" / ")
+                        : sets.filter(s=>s.reps).map(s=>`${s.weight||"BW"}×${s.reps}`).join(" / ");
+                      return (
+                        <div key={name} style={{ display:"flex", justifyContent:"space-between",
+                          alignItems:"baseline", marginBottom:5, gap:8 }}>
+                          <span style={{ fontFamily:"var(--font-b)", fontSize:12, color:"var(--muted)",
+                            flexShrink:0, maxWidth:"45%" }}>{name}</span>
+                          <span style={{ fontFamily:"var(--font-m)", fontSize:11,
+                            color:"var(--text)", textAlign:"right" }}>{display}</span>
+                        </div>
+                      );
+                    })}
+                    {session.notes && (
+                      <div style={{ fontFamily:"var(--font-b)", fontSize:12, color:"var(--muted)",
+                        fontStyle:"italic", marginTop:8 }}>"{session.notes}"</div>
+                    )}
                   </div>
                 )}
               </div>
             );
           })}
-          {selectedSession.notes && <div style={{ marginTop:8, fontFamily:"var(--font-b)", fontSize:12, color:"var(--muted)", fontStyle:"italic" }}>"{selectedSession.notes}"</div>}
         </div>
-      )}
-      {history.length === 0 && (
-        <div style={{ ...S.card, textAlign:"center", padding:32, color:"var(--muted)" }}>
-          <div style={{ fontSize:36, marginBottom:8 }}>📅</div>No sessions logged yet.
-        </div>
-      )}
+      ))}
       <div style={{ height:20 }} />
     </div>
   );
