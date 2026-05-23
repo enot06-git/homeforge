@@ -303,21 +303,22 @@ const DAY_TEMPLATES = {
   "Push": [
     { name:"Barbell Bench Press",    alts:["Dumbbell Bench Press","Push-Up"],           eq:["barbell","squatstands","bench"] },
     { name:"Dumbbell Shoulder Press",alts:["Overhead Press","Pike Push-Up"],            eq:["dumbbells"] },
-    { name:"EZ Bar Skull Crusher",   alts:["Tricep Overhead Ext","Tricep Dips"],        eq:["ezbar","bench"] },
+    { name:"Weighted Dip",           alts:["Tricep Dips","Close-Grip Bench Press"],     eq:["pullupbar","dipbelt"] },
     { name:"Dumbbell Fly",           alts:["Resistance Band Press","Push-Up"],          eq:["dumbbells","bench"] },
-    { name:"Thoracic Extension",     alts:["Dead Bug"],                                 eq:["bench","bodyweight"] },
+    { name:"EZ Bar Skull Crusher",   alts:["Tricep Overhead Ext","Diamond Push-Up"],    eq:["ezbar","bench"] },
   ],
   "Pull": [
-    { name:"Assisted Pull-Up",       alts:["Pull-Up","Inverted Row"],                   eq:["pullupbar","bands"] },
-    { name:"Barbell Deadlift",       alts:["Romanian Deadlift","Single-Leg RDL"],       eq:["barbell"] },
+    { name:"Pull-Up",                alts:["Weighted Pull-Up","Assisted Pull-Up","Inverted Row"], eq:["pullupbar"] },
     { name:"Barbell Row",            alts:["Dumbbell Row","Inverted Row"],               eq:["barbell"] },
+    { name:"Band Pull-Apart",        alts:["EZ Bar Upright Row","EZ Bar Reverse Curl"], eq:["bands"] },
     { name:"EZ Bar Curl",            alts:["Dumbbell Curl","Chin-Up"],                  eq:["ezbar"] },
     { name:"Thoracic Extension",     alts:["Dead Bug"],                                 eq:["bench","bodyweight"] },
   ],
   "Legs": [
     { name:"Barbell Squat",          alts:["Goblet Squat","Squat"],                     eq:["barbell","squatstands"] },
-    { name:"Romanian Deadlift",      alts:["Single-Leg RDL","Goblet Squat"],            eq:["dumbbells"] },
-    { name:"Single-Arm DB Press",    alts:["Dumbbell Shoulder Press","Pike Push-Up"],   eq:["dumbbells"] },
+    { name:"Romanian Deadlift",      alts:["Barbell Deadlift","Single-Leg RDL"],        eq:["dumbbells"] },
+    { name:"Bulgarian Split Squat",  alts:["Lunge","Single-Leg Glute Bridge"],          eq:["bodyweight","bench"] },
+    { name:"Calf Raise",             alts:["Single-Leg Balance Disc"],                  eq:["bodyweight"] },
     { name:"Thoracic Extension",     alts:["Dead Bug"],                                 eq:["bench","bodyweight"] },
   ],
   "Full Body": [
