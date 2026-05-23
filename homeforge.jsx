@@ -308,11 +308,11 @@ const DAY_TEMPLATES = {
     { name:"EZ Bar Skull Crusher",   alts:["Tricep Overhead Ext","Diamond Push-Up"],    eq:["ezbar","bench"] },
   ],
   "Pull": [
+    { name:"Barbell Deadlift",       alts:["Romanian Deadlift","Single-Leg RDL"],        eq:["barbell"] },
     { name:"Pull-Up",                alts:["Weighted Pull-Up","Assisted Pull-Up","Inverted Row"], eq:["pullupbar"] },
-    { name:"Barbell Row",            alts:["Dumbbell Row","Inverted Row"],               eq:["barbell"] },
+    { name:"Dumbbell Row",           alts:["Inverted Row"],                              eq:["dumbbells"] },
     { name:"Band Pull-Apart",        alts:["EZ Bar Upright Row","EZ Bar Reverse Curl"], eq:["bands"] },
     { name:"EZ Bar Curl",            alts:["Dumbbell Curl","Chin-Up"],                  eq:["ezbar"] },
-    { name:"Thoracic Extension",     alts:["Dead Bug"],                                 eq:["bench","bodyweight"] },
   ],
   "Legs": [
     { name:"Barbell Squat",          alts:["Goblet Squat","Squat"],                     eq:["barbell","squatstands"] },
