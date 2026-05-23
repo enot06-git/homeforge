@@ -18,6 +18,7 @@ button:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
 @keyframes spin{to{transform:rotate(360deg);}}
 @keyframes barRise{from{transform:scaleY(0)}to{transform:scaleY(1)}}
 @keyframes barGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes shimmer{0%,100%{opacity:.4}50%{opacity:.9}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
 `;
 const injectStyle = () => {
@@ -718,6 +719,18 @@ function getMuscleWeeklySFR(muscle, history, weeklySets) {
 }
 
 // ── Claude API ────────────────────────────────────────────────────────────────
+// ── Dedup helper ─────────────────────────────────────────────────────────────
+// Keep the first occurrence of each date+day pair; later duplicates are dropped.
+function dedupHistory(arr) {
+  const seen = new Set();
+  return (arr || []).filter(h => {
+    const key = `${String(h.date).slice(0,10)}|${h.day}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // ── Google Sheets sync ────────────────────────────────────────────────────────
 const SHEETS_URL = "https://script.google.com/macros/s/AKfycbwtUvzbIeE7REyYIrMMTw5Otn1Uvklfvz6VZOgm_z4-Mmkzu33KQE2yD8plbwDt8tE/exec";
 
@@ -775,6 +788,28 @@ async function syncConfig(data) {
   } catch(e) { /* silent */ }
 }
 
+// Wipe Sheets sessions, then upload the clean deduplicated local set
+async function dedupAndResync(data, setSyncStatus, setMsg) {
+  setSyncStatus("syncing");
+  setMsg("Clearing Sheets…");
+  try {
+    await sheetsPost({ action: "clear_sessions" });
+    const clean = dedupHistory(data.history || []);
+    for (let i = 0; i < clean.length; i++) {
+      setMsg(`Uploading ${i + 1}/${clean.length}…`);
+      await syncSession(clean[i], data.nextSession || {}, data.bodyWeightHistory || []);
+    }
+    await syncConfig(data);
+    setSyncStatus("ok");
+    setMsg(`✓ Deduped: ${clean.length} sessions in Sheets`);
+    return clean;
+  } catch(e) {
+    setSyncStatus("error");
+    setMsg(`✗ ${e.message}`);
+    throw e;
+  }
+}
+
 // Pull all sessions + config from Sheets and merge into localStorage data
 async function restoreFromSheets(setData, setSyncStatus) {
   setSyncStatus("syncing");
@@ -808,9 +843,11 @@ async function restoreFromSheets(setData, setSyncStatus) {
         return String(d).slice(0, 10);
       };
       const existing = d.history || [];
-      const cloud    = (sessRes.sessions || [])
-        .filter(s => s.date && s.day)
-        .map(s => ({ ...s, date: normDate(s.date) }));
+      const cloud    = dedupHistory(
+        (sessRes.sessions || [])
+          .filter(s => s.date && s.day)
+          .map(s => ({ ...s, date: normDate(s.date) }))
+      );
       const merged   = [...cloud];
       existing.forEach(local => {
         const localDate = normDate(local.date);
@@ -1695,8 +1732,185 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   );
 }
 
+// ── AI Session Summary ─────────────────────────────────────────────────────────
+function buildSessionSummaryPrompt(entry, prevHistory, data) {
+  const { day, volume, log, rating, notes } = entry;
+
+  let totalRIR = 0, rirCount = 0;
+  const exerciseLines = Object.entries(log).map(([exName, sets]) => {
+    const setStrs = sets.map(s => {
+      const rpe = parseFloat(s.rpe);
+      if (!isNaN(rpe)) { totalRIR += rpe; rirCount++; }
+      if (s.seconds) return `${s.seconds}s RIR${s.rpe ?? "?"}`;
+      return `${s.weight || "BW"}kg×${s.reps} RIR${s.rpe ?? "?"}`;
+    }).join(", ");
+
+    // Per-exercise comparison vs last same-day session
+    const prev2 = (prevHistory || []).filter(h => h.day === day && h.log?.[exName]).slice(0, 2);
+    const prevStr = prev2.map(h => {
+      const ps = (h.log[exName] || []);
+      const maxW = Math.max(0, ...ps.map(s => parseFloat(s.weight) || 0));
+      return `${h.date}:${maxW > 0 ? maxW + "kg" : "BW"}`;
+    }).join(", ");
+    return `  ${exName}: ${setStrs}${prevStr ? ` [prev: ${prevStr}]` : ""}`;
+  }).join("\n");
+
+  const avgRIR = rirCount > 0 ? (totalRIR / rirCount).toFixed(1) : "?";
+
+  // Same-day session history with per-session RIR
+  const sameDayHistory = (prevHistory || []).filter(h => h.day === day).slice(0, 4);
+  const trendLines = sameDayHistory.length > 0
+    ? sameDayHistory.map(h => {
+        let tRIR = 0, tCount = 0;
+        Object.values(h.log || {}).flat().forEach(s => {
+          const r = parseFloat(s.rpe);
+          if (!isNaN(r)) { tRIR += r; tCount++; }
+        });
+        const hAvgRIR = tCount > 0 ? (tRIR / tCount).toFixed(1) : "?";
+        const stars = h.rating ? "★".repeat(parseInt(h.rating)) : "unrated";
+        return `  ${h.date}: ${(h.volume || 0).toFixed(0)}kg | avg RIR ${hAvgRIR} | ${stars}`;
+      }).join("\n")
+    : "  No previous same-day sessions";
+
+  const prev = sameDayHistory[0];
+  const volDelta = prev
+    ? ` (${volume >= (prev.volume || 0) ? "+" : ""}${(((volume - (prev.volume || 0)) / Math.max(prev.volume || 1, 1)) * 100).toFixed(0)}% vs last ${day})`
+    : "";
+
+  // Weekly volume trend (last 6 weeks)
+  const weekVols = getWeeklyVolumes(prevHistory, 6);
+  const weekVolStr = weekVols.map((w, i) => `W${i + 1}:${Math.round(w.vol)}kg`).join(" ");
+
+  // Overall RIR trajectory across all sessions (last 6)
+  const rirTrajectory = (prevHistory || []).slice(0, 6).map(h => {
+    let r = 0, c = 0;
+    Object.values(h.log || {}).flat().forEach(s => { const v = parseFloat(s.rpe); if (!isNaN(v)) { r += v; c++; } });
+    return c > 0 ? (r / c).toFixed(1) : null;
+  }).filter(Boolean).reverse().join(" → ");
+
+  const meso = initMesocycle(data.mesocycle);
+  const phaseLen = PHASE_LENGTHS[meso.phase] || 12;
+  const deloadNote = shouldDeload(prevHistory) ? "\nNote: deload indicators present — athlete may need a lighter week." : "";
+
+  return `ATHLETE PROFILE
+Level: ${data.level || "Intermediate"} | Age: ${data.age || "?"}y | BW: ${data.weight || "?"}kg | Goal: ${data.goal || "hypertrophy"}
+Mesocycle: ${meso.phase} session ${meso.sessionCount}/${phaseLen}${meso.pendingTransition ? " (PHASE COMPLETE — transition pending)" : ""}${deloadNote}
+
+TODAY — ${day} (${entry.date})
+Total volume: ${volume.toFixed(0)} kg${volDelta}
+${exerciseLines}
+Avg RIR today: ${avgRIR}${rating ? ` | Session rating: ${rating}/5` : ""}${notes ? ` | Athlete note: "${notes}"` : ""}
+
+RECENT ${day.toUpperCase()} SESSIONS (oldest → newest):
+${trendLines}
+
+WEEKLY TOTAL VOLUME TREND (6 weeks):
+${weekVolStr}
+
+OVERALL RIR TRAJECTORY (6 sessions, oldest → newest):
+${rirTrajectory || "insufficient data"}
+
+TOTAL SESSIONS IN LOG: ${(prevHistory || []).length}`;
+}
+
+// ── AI Analysis Panel ─────────────────────────────────────────────────────────
+function parseAiSections(raw) {
+  if (!raw) return { session: "", trends: "", proposals: "" };
+  const get = (tag, next) => {
+    const start = raw.indexOf(`[${tag}]`);
+    if (start === -1) return "";
+    const contentStart = start + tag.length + 2;
+    const end = next ? raw.indexOf(`[${next}]`) : raw.length;
+    return raw.slice(contentStart, end === -1 ? raw.length : end).trim();
+  };
+  return {
+    session:   get("SESSION",   "TRENDS"),
+    trends:    get("TRENDS",    "PROPOSALS"),
+    proposals: get("PROPOSALS", null),
+  };
+}
+
+function AiSection({ label, icon, color, borderColor, bgColor, text, delay }) {
+  if (!text || text === "—") return null;
+  return (
+    <div style={{
+      background: bgColor, border: `1px solid ${borderColor}`, borderRadius:8,
+      padding:"12px 14px", marginTop:10,
+      animation:`fadeUp .3s ${delay}s cubic-bezier(0.16,1,0.3,1) both`
+    }}>
+      <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:11, color, letterSpacing:1, marginBottom:8 }}>
+        {icon} {label}
+      </div>
+      <div style={{ fontFamily:"var(--font-b)", fontSize:13, color:"var(--text)", lineHeight:1.75, whiteSpace:"pre-wrap" }}>
+        {text}
+      </div>
+    </div>
+  );
+}
+
+function AiAnalysisPanel({ loading, raw, onGoToChat, day }) {
+  const sections = parseAiSections(raw);
+  return (
+    <div style={{ marginTop:14 }}>
+      <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:11, color:"var(--purple)", letterSpacing:2, marginBottom:6 }}>
+        🤖 AI COACH ANALYSIS
+      </div>
+      {loading ? (
+        <div style={{ ...S.card, border:"1px solid rgba(168,85,247,0.35)" }}>
+          <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)", marginBottom:10 }}>Analyzing session…</div>
+          {[100, 88, 95, 72, 60, 83, 90, 65].map((w, i) => (
+            <div key={i} style={{
+              height:9, background:"rgba(168,85,247,0.12)", borderRadius:4,
+              marginBottom:7, width:`${w}%`,
+              animation:`shimmer 1.6s ${i * 0.1}s ease-in-out infinite`
+            }} />
+          ))}
+        </div>
+      ) : raw ? (
+        <>
+          <AiSection
+            label="SESSION BREAKDOWN"
+            icon="📊"
+            color="var(--amber)"
+            borderColor="rgba(245,158,11,0.35)"
+            bgColor="rgba(245,158,11,0.05)"
+            text={sections.session}
+            delay={0}
+          />
+          <AiSection
+            label="TREND ANALYSIS"
+            icon="📈"
+            color="var(--purple)"
+            borderColor="rgba(168,85,247,0.35)"
+            bgColor="rgba(168,85,247,0.05)"
+            text={sections.trends}
+            delay={0.08}
+          />
+          <AiSection
+            label={`PROPOSALS — NEXT ${(day || "").toUpperCase()}`}
+            icon="🎯"
+            color="var(--blue)"
+            borderColor="rgba(59,130,246,0.35)"
+            bgColor="rgba(59,130,246,0.05)"
+            text={sections.proposals}
+            delay={0.16}
+          />
+          {onGoToChat && (
+            <button
+              style={{ ...S.btnSm, marginTop:10, fontSize:11, color:"var(--purple)", borderColor:"rgba(168,85,247,0.4)" }}
+              onClick={onGoToChat}
+            >
+              Ask follow-up in chat →
+            </button>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 // ── Workout Screen ────────────────────────────────────────────────────────────
-function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
+function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () => {} }) {
   const day = data.activeDay || (data.split||[])[0] || "Full Body";
   const meso      = initMesocycle(data.mesocycle);
   const isDeload   = meso.phase === "deload";
@@ -1725,6 +1939,8 @@ function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
   const [sessionRating, setSessionRating] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
   const [planSaved, setPlanSaved] = useState(false);
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const age = parseInt(data.age) || 0;
   const deload = shouldDeload(data.history);
   const warnings = getMuscleWarnings(day, data.history);
@@ -1754,6 +1970,24 @@ function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
       .catch(() => setSyncStatus("error"));
     setPlanSaved(true);
     setFinished(true);
+
+    // AI session analysis — fires async, does not block the success screen
+    setAiSummaryLoading(true);
+    setAiSummary(null);
+    const aiSystem = `You are HomeForge AI Coach — an expert strength coach. Analyze the completed session and respond in EXACTLY this format with these three section markers on their own lines. Do not add any text before [SESSION] or after the last proposal.
+
+[SESSION]
+One verdict sentence with a specific volume or intensity number. Then 2-3 sentences citing actual weights, RIR values, or set data from today's log. Be direct.
+
+[TRENDS]
+2-3 sentences on multi-session patterns. Reference exercise names, volume numbers, and RIR trajectory from the history provided. Note progressions, stalls, or warning signs.
+
+[PROPOSALS]
+Three numbered action items for the next ${day} session. Each must name a specific exercise and include a concrete target (weight, reps, sets, or RIR). No vague advice.`;
+    callClaude([{ role: "user", content: buildSessionSummaryPrompt(entry, data.history || [], data) }], aiSystem)
+      .then(text => setAiSummary(text))
+      .catch(() => setAiSummary("[SESSION]\nCould not generate analysis — check your connection.\n[TRENDS]\n—\n[PROPOSALS]\n—"))
+      .finally(() => setAiSummaryLoading(false));
   };
 
   if (day === "REST") return (
@@ -1810,6 +2044,9 @@ function WorkoutScreen({ data, setData, onBack, setSyncStatus = () => {} }) {
           </div>
         </div>
       )}
+      {/* AI Coach Full Analysis */}
+      <AiAnalysisPanel loading={aiSummaryLoading} raw={aiSummary} onGoToChat={onGoToChat} day={day} />
+
       <button style={{ ...S.btn, width:"100%", justifyContent:"center", marginTop:12 }} onClick={() => setFinished(false)}>Back to Workout</button>
     </div>
   );
@@ -3598,6 +3835,7 @@ export default function App() {
   const [showFavs, setShowFavs] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null); // null | "syncing" | "ok" | "error"
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [showDedupConfirm, setShowDedupConfirm] = useState(false);
   const [restoreMsg, setRestoreMsg] = useState("");
 
   const [syncing, setSyncing] = useState(false);
@@ -3634,6 +3872,18 @@ export default function App() {
     }
     setTimeout(() => setRestoreMsg(""), 4000);
   };
+
+  const handleDedupResync = async () => {
+    setShowDedupConfirm(false);
+    setSyncing(true);
+    try {
+      const clean = await dedupAndResync(data, setSyncStatus, setRestoreMsg);
+      // Persist deduped history locally
+      if (clean) setData(d => ({ ...d, history: clean }));
+    } catch {}
+    setSyncing(false);
+    setTimeout(() => setRestoreMsg(""), 5000);
+  };
   const [data, setData] = useState(() => {
     try {
       const migrated = migrateStorage();
@@ -3645,8 +3895,8 @@ export default function App() {
           base.history.push(s);
         }
       });
-      // Sort history newest first
-      base.history.sort((a,b) => new Date(b.date) - new Date(a.date));
+      // Dedup and sort history newest first
+      base.history = dedupHistory(base.history).sort((a,b) => new Date(b.date) - new Date(a.date));
       return base;
     } catch {
       return { ...PREFILLED_DATA, profileBaseline: { ...USER_BASELINE }, history: [...RECOVERED_SESSIONS] };
@@ -3697,6 +3947,15 @@ export default function App() {
                 <button style={S.btnSm} onClick={() => setShowRestoreConfirm(false)}>No</button>
               </div>
             )}
+            {!showDedupConfirm ? (
+              <button style={S.btnSm} onClick={() => setShowDedupConfirm(true)} title="Remove duplicate sessions from Sheets and local cache">🔁 Dedup</button>
+            ) : (
+              <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--amber)" }}>Wipe Sheets & resync?</span>
+                <button style={{ ...S.btnSm, color:"var(--red)" }} onClick={handleDedupResync}>Yes</button>
+                <button style={S.btnSm} onClick={() => setShowDedupConfirm(false)}>No</button>
+              </div>
+            )}
             {restoreMsg && <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--amber)" }}>{restoreMsg}</span>}
             {tab === "workout" && (
               <button style={S.btnSm} onClick={() => setTab("home")}>← Home</button>
@@ -3714,7 +3973,7 @@ export default function App() {
       {step === 3 && (
         <>
           {tab === "home"     && <HomeScreen    data={data} setData={setData} onStartSession={() => setTab("workout")} onGoToTab={setTab} />}
-          {tab === "workout"  && <WorkoutErrorBoundary><WorkoutScreen data={data} setData={setData} onBack={() => setTab("home")} setSyncStatus={setSyncStatus} /></WorkoutErrorBoundary>}
+          {tab === "workout"  && <WorkoutErrorBoundary><WorkoutScreen data={data} setData={setData} onBack={() => setTab("home")} onGoToChat={() => setTab("chat")} setSyncStatus={setSyncStatus} /></WorkoutErrorBoundary>}
           {tab === "calendar" && <CalendarScreen data={data} setData={setData} />}
           {tab === "stats"    && <StatsScreen    data={data} />}
           {tab === "chat"     && <ChatScreen     data={data} />}
