@@ -309,7 +309,7 @@ const DAY_TEMPLATES = {
   ],
   "Pull": [
     { name:"Barbell Deadlift",       alts:["Romanian Deadlift","Single-Leg RDL"],        eq:["barbell"] },
-    { name:"Pull-Up",                alts:["Weighted Pull-Up","Assisted Pull-Up","Inverted Row"], eq:["pullupbar"] },
+    { name:"Assisted Pull-Up",       alts:["Pull-Up","Weighted Pull-Up","Inverted Row"],          eq:["pullupbar"] },
     { name:"Dumbbell Row",           alts:["Inverted Row"],                              eq:["dumbbells"] },
     { name:"Band Pull-Apart",        alts:["EZ Bar Upright Row","EZ Bar Reverse Curl"], eq:["bands"] },
     { name:"EZ Bar Curl",            alts:["Dumbbell Curl","Chin-Up"],                  eq:["ezbar"] },
@@ -839,22 +839,22 @@ async function restoreFromSheets(setData, setSyncStatus) {
       // Normalise date to YYYY-MM-DD string (Sheets may return Date objects)
       const normDate = (d) => {
         if (!d) return "";
-        if (d instanceof Date) {
-          // Use local date to avoid UTC offset shifting the date
-          const y = d.getFullYear();
-          const m = String(d.getMonth()+1).padStart(2,"0");
-          const day = String(d.getDate()).padStart(2,"0");
-          return `${y}-${m}-${day}`;
-        }
-        if (typeof d === "number") {
-          const dt = new Date(d);
+        const toISO = (dt) => {
           const y = dt.getFullYear();
-          const m = String(dt.getMonth()+1).padStart(2,"0");
+          const mo = String(dt.getMonth()+1).padStart(2,"0");
           const day = String(dt.getDate()).padStart(2,"0");
-          return `${y}-${m}-${day}`;
-        }
-        // Already a string — take first 10 chars (YYYY-MM-DD)
-        return String(d).slice(0, 10);
+          return `${y}-${mo}-${day}`;
+        };
+        if (d instanceof Date) return toISO(d);
+        if (typeof d === "number") return toISO(new Date(d));
+        const s = String(d);
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        // Human-readable string (e.g. "Sun Apr 12") — try direct parse, then append year
+        const direct = new Date(s);
+        if (!isNaN(direct.getTime())) return toISO(direct);
+        const withYear = new Date(`${s} ${new Date().getFullYear()}`);
+        if (!isNaN(withYear.getTime())) return toISO(withYear);
+        return s.slice(0, 10);
       };
       const existing = d.history || [];
       const cloud    = dedupHistory(
@@ -3910,10 +3910,17 @@ export default function App() {
           base.history.push(s);
         }
       });
+      // Remove incomplete Playwright test session accidentally logged 2026-05-23
+      base.history = base.history.filter(h => !(h.date === "2026-05-23" && h.day === "Push" && (h.volume || 0) < 3000));
       // Dedup and sort history newest first
       base.history = dedupHistory(base.history).sort((a,b) => new Date(b.date) - new Date(a.date));
       // Reconcile mesocycle count from history if it was lost or never set
       base.mesocycle = reconcileMesocycle(base.mesocycle, base.history);
+      // One-time: advance to deload now that accumulation cycle is complete (2026-05-24)
+      if (!base._mesocycleDeloadV1) {
+        base.mesocycle = { phase: "deload", sessionCount: 0, startDate: "2026-05-24", pendingTransition: false };
+        base._mesocycleDeloadV1 = true;
+      }
       return base;
     } catch {
       return { ...PREFILLED_DATA, profileBaseline: { ...USER_BASELINE }, history: [...RECOVERED_SESSIONS] };
