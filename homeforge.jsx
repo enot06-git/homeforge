@@ -516,6 +516,19 @@ function initMesocycle(existing) {
   return { phase: "accumulation", sessionCount: 0, startDate: new Date().toISOString().slice(0,10), pendingTransition: false };
 }
 
+// If sessionCount is 0 but history exists, infer count from history so the
+// mesocycle display is accurate after a restore or first load on existing data.
+function reconcileMesocycle(mesocycle, history) {
+  const m = initMesocycle(mesocycle);
+  if (m.sessionCount > 0 || !history || history.length === 0) return m;
+  const phaseLen = PHASE_LENGTHS[m.phase] || 12;
+  const count = m.startDate
+    ? history.filter(h => String(h.date).slice(0, 10) >= m.startDate).length
+    : Math.min(history.length, phaseLen);
+  const sessionCount = Math.min(count, phaseLen);
+  return { ...m, sessionCount, pendingTransition: sessionCount >= phaseLen };
+}
+
 function nextPhase(phase) {
   if (phase === "accumulation")   return "intensification";
   if (phase === "intensification") return "deload";
@@ -891,6 +904,7 @@ async function restoreFromSheets(setData, setSyncStatus) {
         history:            merged,
         nextSession:        latestNextSession,
         bodyWeightHistory:  bwMerged,
+        mesocycle:          reconcileMesocycle(d.mesocycle, merged),
       };
     });
 
@@ -3898,6 +3912,8 @@ export default function App() {
       });
       // Dedup and sort history newest first
       base.history = dedupHistory(base.history).sort((a,b) => new Date(b.date) - new Date(a.date));
+      // Reconcile mesocycle count from history if it was lost or never set
+      base.mesocycle = reconcileMesocycle(base.mesocycle, base.history);
       return base;
     } catch {
       return { ...PREFILLED_DATA, profileBaseline: { ...USER_BASELINE }, history: [...RECOVERED_SESSIONS] };
