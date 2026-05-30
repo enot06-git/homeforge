@@ -519,7 +519,7 @@ function getStretchItems(focus, totalMinutes) {
   const baseTotal = routine.items.reduce((a, it) =>
     a + it.sec * (it.sides ? 2 : 1) * (it.sets || 1), 0);
   const scale = Math.min(1.5, Math.max(0.7, budget / baseTotal));
-  return routine.items.map(it => ({ ...it, effectiveSec: Math.round(it.sec * scale) }));
+  return routine.items.map(it => ({ ...it, effectiveSec: Math.max(30, Math.round(it.sec * scale / 30) * 30) }));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -2028,34 +2028,113 @@ function AiAnalysisPanel({ loading, raw, onGoToChat, day }) {
   );
 }
 
+// ── Stretch helpers ───────────────────────────────────────────────────────────
+function getStretchAlternatives(itemName, focus) {
+  const seen = new Set([itemName]);
+  const result = [];
+  const primary = STRETCH_ROUTINES[focus];
+  if (primary) {
+    for (const it of primary.items) {
+      if (!seen.has(it.name)) { seen.add(it.name); result.push({ ...it, fromRoutine: primary.label }); }
+    }
+  }
+  for (const [key, r] of Object.entries(STRETCH_ROUTINES)) {
+    if (key === focus) continue;
+    for (const it of r.items) {
+      if (!seen.has(it.name)) { seen.add(it.name); result.push({ ...it, fromRoutine: r.label }); }
+    }
+  }
+  return result.slice(0, 6);
+}
+
+function StretchCard({ item, exNum, totalEx, focus }) {
+  const [showAlts, setShowAlts] = useState(false);
+  const [swappedTo, setSwappedTo] = useState(null);
+  const active = swappedTo || item;
+
+  const fmtTime = sec => {
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return m > 0 ? `${m}:${String(s).padStart(2,"0")}` : `${sec}s`;
+  };
+
+  const alts = getStretchAlternatives(active.name, focus);
+
+  const doSwap = alt => {
+    setSwappedTo({ ...alt, effectiveSec: active.effectiveSec });
+    setShowAlts(false);
+  };
+
+  return (
+    <div style={{ ...S.card, border: showAlts ? "1px solid rgba(34,197,94,0.4)" : "1px solid var(--border)", transition:"border .2s" }}>
+      <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:10 }}>
+        <div style={{ flexShrink:0, textAlign:"center", minWidth:36 }}>
+          <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:32, color:"var(--green)", lineHeight:1 }}>{exNum}</div>
+          <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>/{totalEx}</div>
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:17, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+            {active.name}
+            {swappedTo && <span style={S.tag("var(--blue)")}>swapped</span>}
+          </div>
+          <div style={{ display:"flex", gap:4, marginTop:4, flexWrap:"wrap" }}>
+            {active.sides && <span style={S.tag("var(--purple)")}>each side</span>}
+            {(active.sets || 1) > 1 && <span style={S.tag("var(--blue)")}>×{active.sets} sets</span>}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background:"rgba(34,197,94,0.08)", border:"1px solid rgba(34,197,94,0.2)", borderRadius:8, padding:"10px 12px", marginBottom:10 }}>
+        <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--green)", letterSpacing:1, marginBottom:4 }}>HOLD TIME</div>
+        <div style={{ display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap" }}>
+          <span style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:26, color:"var(--green)", lineHeight:1 }}>{fmtTime(active.effectiveSec)}</span>
+          {active.sides && <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:16, color:"var(--text)" }}>each side</span>}
+          {(active.sets || 1) > 1 && <span style={{ fontFamily:"var(--font-h)", fontWeight:600, fontSize:14, color:"var(--muted)" }}>× {active.sets} sets</span>}
+        </div>
+      </div>
+
+      <div style={{ fontFamily:"var(--font-b)", fontSize:12, color:"var(--muted)", lineHeight:1.5, marginBottom:10 }}>
+        {active.cue}
+      </div>
+
+      <div>
+        <button
+          style={{ ...S.btnSm, width:"100%", textAlign:"left", display:"flex", justifyContent:"space-between" }}
+          onClick={() => setShowAlts(a => !a)}>
+          <span>🔄 {swappedTo ? "Swap again" : "Swap exercise"}</span>
+          <span style={{ color:"var(--green)" }}>{showAlts ? "▲" : "▼"}</span>
+        </button>
+        {showAlts && (
+          <div style={{ marginTop:8, animation:"fadeUp .15s ease both" }}>
+            {alts.map((a, i) => (
+              <div key={i}
+                style={{ ...S.card, padding:"10px 12px", marginBottom:6, display:"flex", alignItems:"center", gap:10, cursor:"pointer", border:"1px solid var(--border)" }}
+                onClick={() => doSwap(a)}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14 }}>{a.name}</div>
+                  <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)" }}>
+                    {a.fromRoutine}{a.sides ? " · each side" : ""}{(a.sets||1)>1 ? ` · ×${a.sets} sets` : ""}
+                  </div>
+                </div>
+                <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:13, color:"var(--green)", flexShrink:0 }}>Use →</span>
+              </div>
+            ))}
+            <button style={S.btnSm} onClick={() => setShowAlts(false)}>✕ Close</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Stretch Session ───────────────────────────────────────────────────────────
 function StretchSession({ data, setData, onBack }) {
   const suggested = suggestStretchFocus(data.history || []);
   const [minutes, setMinutes] = useState(15);
   const [focus, setFocus] = useState(suggested);
-  const [checked, setChecked] = useState(new Set());
   const [finished, setFinished] = useState(false);
 
   const routine = STRETCH_ROUTINES[focus];
   const items = getStretchItems(focus, minutes);
-
-  const checkboxItems = items.flatMap((item, i) => {
-    if (item.sides) {
-      return [
-        { key:`${i}_L`, label:`${item.name} — Left`,  sec:item.effectiveSec, cue:item.cue },
-        { key:`${i}_R`, label:`${item.name} — Right`, sec:item.effectiveSec, cue:item.cue },
-      ];
-    }
-    if ((item.sets || 1) > 1) {
-      return Array.from({ length: item.sets }, (_, s) => ({
-        key:`${i}_${s}`, label:`${item.name} (set ${s+1})`, sec:item.effectiveSec, cue:item.cue,
-      }));
-    }
-    return [{ key:`${i}`, label:item.name, sec:item.effectiveSec, cue:item.cue }];
-  });
-
-  const toggle = key => setChecked(p => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  const allDone = checked.size >= checkboxItems.length;
 
   const logSession = () => {
     const entry = { date:new Date().toISOString().slice(0,10), day:"Stretch", volume:0, focus, duration:minutes, log:{} };
@@ -2080,7 +2159,6 @@ function StretchSession({ data, setData, onBack }) {
       <button style={{ ...S.btnSm, marginBottom:14 }} onClick={onBack}>← Back</button>
       <div style={S.h1}>Stretch <span style={{ color:"var(--green)" }}>Session</span></div>
 
-      {/* Time picker */}
       <div style={{ marginBottom:18 }}>
         <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", letterSpacing:1, marginBottom:8 }}>AVAILABLE TIME</div>
         <div style={{ display:"flex", gap:8 }}>
@@ -2092,7 +2170,6 @@ function StretchSession({ data, setData, onBack }) {
         </div>
       </div>
 
-      {/* Focus selector */}
       <div style={{ marginBottom:18 }}>
         <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", letterSpacing:1, marginBottom:8 }}>
           FOCUS {suggested === focus && <span style={{ color:"var(--green)" }}>· suggested for today</span>}
@@ -2102,48 +2179,25 @@ function StretchSession({ data, setData, onBack }) {
             <button key={key} type="button"
               style={{ ...S.chip(focus === key), padding:"8px 12px", fontSize:12, minHeight:40,
                 ...(focus === key ? { borderColor:r.color, color:r.color } : {}) }}
-              onClick={() => { setFocus(key); setChecked(new Set()); }}>{r.label}</button>
+              onClick={() => setFocus(key)}>{r.label}</button>
           ))}
         </div>
         <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)" }}>{routine.desc}</div>
       </div>
 
-      {/* Checklist */}
       <div style={S.h2}>Routine · ~{minutes} min</div>
-      {checkboxItems.map(item => {
-        const done = checked.has(item.key);
-        const mins = Math.floor(item.sec / 60);
-        const secs = item.sec % 60;
-        const timeStr = mins > 0 ? `${mins}:${String(secs).padStart(2,"0")}` : `${item.sec}s`;
-        return (
-          <div key={item.key}
-            style={{ ...S.card, display:"flex", alignItems:"flex-start", gap:12, padding:"12px 14px",
-              opacity:done ? 0.45 : 1, cursor:"pointer",
-              border:`1px solid ${done ? "var(--bg4)" : "var(--border)"}` }}
-            onClick={() => toggle(item.key)}>
-            <div style={{ width:22, height:22, borderRadius:4, flexShrink:0, marginTop:2,
-              border:`2px solid ${done ? "var(--green)" : "var(--border)"}`,
-              background:done ? "var(--green)" : "transparent",
-              display:"flex", alignItems:"center", justifyContent:"center" }}>
-              {done && <span style={{ color:"#000", fontSize:13, fontWeight:900 }}>✓</span>}
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14,
-                  textDecoration:done ? "line-through" : "none" }}>{item.label}</span>
-                <span style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--amber)", flexShrink:0, marginLeft:8 }}>{timeStr}</span>
-              </div>
-              <div style={{ fontFamily:"var(--font-b)", fontSize:11, color:"var(--muted)", marginTop:3, lineHeight:1.4 }}>{item.cue}</div>
-            </div>
-          </div>
-        );
-      })}
+      {items.map((item, i) => (
+        <StretchCard
+          key={`${focus}_${item.name}_${i}`}
+          item={item}
+          exNum={i + 1}
+          totalEx={items.length}
+          focus={focus}
+        />
+      ))}
 
-      <button
-        style={{ ...S.btnGreen, width:"100%", justifyContent:"center", marginTop:14,
-          opacity:allDone ? 1 : 0.65 }}
-        onClick={logSession}>
-        {allDone ? "✓ Log Stretch Session" : `Log Session (${checked.size}/${checkboxItems.length} done)`}
+      <button style={{ ...S.btnGreen, width:"100%", justifyContent:"center", marginTop:14 }} onClick={logSession}>
+        ✓ Log Stretch Session
       </button>
       <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", textAlign:"center", marginTop:6 }}>
         Saved to history · not synced to Sheets
