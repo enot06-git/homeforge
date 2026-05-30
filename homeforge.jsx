@@ -419,6 +419,86 @@ const DAY_TEMPLATES = {
   "REST": [],
 };
 
+// ── Stretch Routines — tailored for age 49, upper-back kyphosis, lumbar disc ──
+const STRETCH_ROUTINES = {
+  upper_back: {
+    label: "Upper Back",
+    desc:  "Thoracic extension · pec opener · postural reset",
+    color: "var(--amber)",
+    afterDay: ["Push","Full Body","Full Body A","Upper A","Upper B","Chest","Shoulders","Arms"],
+    items: [
+      { name:"Doorway Chest Stretch",     sec:60, sides:true,  cue:"Elbow 90°, stagger feet, lean through — feel across sternum, not neck" },
+      { name:"Thoracic Foam Roller",      sec:90, sides:false, cue:"Hands behind head, let gravity extend you — stop at lower ribs, never roll lumbar" },
+      { name:"Wall Angel",                sec:80, sides:false, cue:"Lower back on wall, ribcage down — slide arms up only as far as wall contact holds (2×8 slow)" },
+      { name:"Thread the Needle",         sec:60, sides:true,  cue:"All-fours, thread arm under — thoracic rotation only, hips stay square" },
+      { name:"Lat Doorway Stretch",       sec:45, sides:true,  cue:"Grab frame at head height, lean back and away — tight lats pull shoulders into that forward posture" },
+    ],
+  },
+  lower_back: {
+    label: "Lower Back",
+    desc:  "Disc decompression · hip flexor · piriformis",
+    color: "var(--blue)",
+    afterDay: ["Legs","Pull","Full Body B","Lower A","Lower B","Back"],
+    items: [
+      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Tall torso, squeeze glute of back leg — reduces anterior tilt that directly loads discs" },
+      { name:"Figure-4 Piriformis",       sec:75, sides:true,  cue:"Lying on back, ankle over knee, pull thigh gently — keep lower back flat, never force" },
+      { name:"Cat-Cow Flow",              sec:90, sides:false, cue:"Exhale fully rounding up, inhale sinking down — stop before any lumbar discomfort" },
+      { name:"Prone Extension",           sec:30, sets:3, sides:false, cue:"Face down, prop on forearms, belly sinks to floor — skip if causes leg tingling or radiating pain" },
+      { name:"Knee to Chest",             sec:60, sides:true,  cue:"Gentle pull, other leg straight on floor — decompresses lumbar facets" },
+    ],
+  },
+  hips_legs: {
+    label: "Hips & Legs",
+    desc:  "Hip flexors · hamstrings · glute activation",
+    color: "var(--green)",
+    afterDay: ["Legs","Full Body B","Lower A","Lower B"],
+    items: [
+      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Tall torso, squeeze glute of back leg — target the front of the hip, not the knee" },
+      { name:"Figure-4 Piriformis",       sec:75, sides:true,  cue:"Lying on back, ankle over knee, gently pull thigh toward chest" },
+      { name:"Supine Hamstring Stretch",  sec:60, sides:true,  cue:"Loop towel under foot, leg toward ceiling — lower back stays flat on floor throughout" },
+      { name:"Glute Bridge Hold",         sec:60, sides:false, cue:"Hold top position — activates glutes to counter hip flexor dominance" },
+      { name:"Standing Quad Stretch",     sec:30, sides:true,  cue:"Near wall for balance, pull ankle to glute — gentle, no pulling at the knee" },
+    ],
+  },
+  full_body: {
+    label: "Full Body",
+    desc:  "Complete postural reset · upper + lower back",
+    color: "var(--purple)",
+    afterDay: [],
+    items: [
+      { name:"Doorway Chest Stretch",     sec:60, sides:true,  cue:"Elbow 90°, stagger feet, lean through — feel across sternum, not neck" },
+      { name:"Thoracic Foam Roller",      sec:90, sides:false, cue:"Hands behind head, gravity extends you — stop at lower ribs, never roll lumbar" },
+      { name:"Wall Angel",                sec:80, sides:false, cue:"Lower back on wall, ribcage down — arms slide up only as far as wall contact holds (2×8)" },
+      { name:"Thread the Needle",         sec:60, sides:true,  cue:"All-fours, thread arm under — thoracic rotation only, hips stay square" },
+      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Tall torso, squeeze glute of back leg — key for disc health and posture correction" },
+      { name:"Figure-4 Piriformis",       sec:75, sides:true,  cue:"Lying on back, ankle over knee, pull thigh gently — lower back flat throughout" },
+      { name:"Cat-Cow Flow",              sec:90, sides:false, cue:"Exhale fully rounding, inhale sinking — slow and deliberate, stop before discomfort" },
+      { name:"Prone Extension",           sec:30, sets:3, sides:false, cue:"Face down, prop on forearms, belly sinks — skip if causes leg tingling" },
+      { name:"Supine Hamstring Stretch",  sec:60, sides:true,  cue:"Loop towel under foot, leg toward ceiling — lower back stays flat on floor" },
+      { name:"Lat Doorway Stretch",       sec:45, sides:true,  cue:"Grab frame at head height, lean back — tight lats compound forward-shoulder posture" },
+    ],
+  },
+};
+
+function suggestStretchFocus(history) {
+  const last = (history || []).find(h => h.day !== "Stretch");
+  if (!last) return "full_body";
+  for (const [key, r] of Object.entries(STRETCH_ROUTINES)) {
+    if (r.afterDay.includes(last.day)) return key;
+  }
+  return "upper_back";
+}
+
+function getStretchItems(focus, totalMinutes) {
+  const routine = STRETCH_ROUTINES[focus];
+  if (!routine) return [];
+  const budget = totalMinutes * 60;
+  const baseTotal = routine.items.reduce((a, it) =>
+    a + it.sec * (it.sides ? 2 : 1) * (it.sets || 1), 0);
+  const scale = Math.min(1.5, Math.max(0.7, budget / baseTotal));
+  return routine.items.map(it => ({ ...it, effectiveSec: Math.round(it.sec * scale) }));
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 // ── Trend detection ─────────────────────────────────────────────────────────
 function detectTrends(day, history) {
@@ -522,9 +602,10 @@ function reconcileMesocycle(mesocycle, history) {
   const m = initMesocycle(mesocycle);
   if (m.sessionCount > 0 || !history || history.length === 0) return m;
   const phaseLen = PHASE_LENGTHS[m.phase] || 12;
+  const trainingSessions = history.filter(h => h.day !== "Stretch");
   const count = m.startDate
-    ? history.filter(h => String(h.date).slice(0, 10) >= m.startDate).length
-    : Math.min(history.length, phaseLen);
+    ? trainingSessions.filter(h => String(h.date).slice(0, 10) >= m.startDate).length
+    : Math.min(trainingSessions.length, phaseLen);
   const sessionCount = Math.min(count, phaseLen);
   return { ...m, sessionCount, pendingTransition: sessionCount >= phaseLen };
 }
@@ -571,7 +652,7 @@ function getBestFromLastTwoSameDaySessions(exName, day, history, profileBaseline
 }
 
 function getExercisesForDay(day, equipment, goal, favourites, level) {
-  if (day === "REST") return [];
+  if (day === "REST" || day === "Stretch") return [];
 
   const template = DAY_TEMPLATES[day];
   const allFavs = Object.values(favourites||{}).flat();
@@ -1924,6 +2005,130 @@ function AiAnalysisPanel({ loading, raw, onGoToChat, day }) {
   );
 }
 
+// ── Stretch Session ───────────────────────────────────────────────────────────
+function StretchSession({ data, setData, onBack }) {
+  const suggested = suggestStretchFocus(data.history || []);
+  const [minutes, setMinutes] = useState(15);
+  const [focus, setFocus] = useState(suggested);
+  const [checked, setChecked] = useState(new Set());
+  const [finished, setFinished] = useState(false);
+
+  const routine = STRETCH_ROUTINES[focus];
+  const items = getStretchItems(focus, minutes);
+
+  const checkboxItems = items.flatMap((item, i) => {
+    if (item.sides) {
+      return [
+        { key:`${i}_L`, label:`${item.name} — Left`,  sec:item.effectiveSec, cue:item.cue },
+        { key:`${i}_R`, label:`${item.name} — Right`, sec:item.effectiveSec, cue:item.cue },
+      ];
+    }
+    if ((item.sets || 1) > 1) {
+      return Array.from({ length: item.sets }, (_, s) => ({
+        key:`${i}_${s}`, label:`${item.name} (set ${s+1})`, sec:item.effectiveSec, cue:item.cue,
+      }));
+    }
+    return [{ key:`${i}`, label:item.name, sec:item.effectiveSec, cue:item.cue }];
+  });
+
+  const toggle = key => setChecked(p => { const n = new Set(p); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const allDone = checked.size >= checkboxItems.length;
+
+  const logSession = () => {
+    const entry = { date:new Date().toISOString().slice(0,10), day:"Stretch", volume:0, focus, duration:minutes, log:{} };
+    setData(d => ({ ...d, history:[entry,...(d.history||[])] }));
+    setFinished(true);
+  };
+
+  if (finished) return (
+    <div style={S.section}>
+      <div style={S.h1}>Stretch <span style={{ color:"var(--green)" }}>Done!</span></div>
+      <div style={{ ...S.card, textAlign:"center", padding:28, border:"1px solid var(--green)" }}>
+        <div style={{ fontSize:44, marginBottom:8 }}>🧘</div>
+        <div style={{ fontFamily:"var(--font-h)", fontSize:22, color:"var(--green)" }}>{minutes} min · {routine.label}</div>
+        <div style={{ color:"var(--muted)", fontSize:12, marginTop:6 }}>{routine.desc}</div>
+      </div>
+      <button style={{ ...S.btn, width:"100%", marginTop:14 }} onClick={onBack}>← Home</button>
+    </div>
+  );
+
+  return (
+    <div style={{ ...S.section, paddingBottom:80 }}>
+      <button style={{ ...S.btnSm, marginBottom:14 }} onClick={onBack}>← Back</button>
+      <div style={S.h1}>Stretch <span style={{ color:"var(--green)" }}>Session</span></div>
+
+      {/* Time picker */}
+      <div style={{ marginBottom:18 }}>
+        <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", letterSpacing:1, marginBottom:8 }}>AVAILABLE TIME</div>
+        <div style={{ display:"flex", gap:8 }}>
+          {[10, 15, 20].map(m => (
+            <button key={m} type="button"
+              style={{ ...S.chip(minutes === m), padding:"10px 18px", fontSize:14, fontFamily:"var(--font-h)", fontWeight:700, minHeight:44 }}
+              onClick={() => setMinutes(m)}>{m} min</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Focus selector */}
+      <div style={{ marginBottom:18 }}>
+        <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", letterSpacing:1, marginBottom:8 }}>
+          FOCUS {suggested === focus && <span style={{ color:"var(--green)" }}>· suggested for today</span>}
+        </div>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+          {Object.entries(STRETCH_ROUTINES).map(([key, r]) => (
+            <button key={key} type="button"
+              style={{ ...S.chip(focus === key), padding:"8px 12px", fontSize:12, minHeight:40,
+                ...(focus === key ? { borderColor:r.color, color:r.color } : {}) }}
+              onClick={() => { setFocus(key); setChecked(new Set()); }}>{r.label}</button>
+          ))}
+        </div>
+        <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)" }}>{routine.desc}</div>
+      </div>
+
+      {/* Checklist */}
+      <div style={S.h2}>Routine · ~{minutes} min</div>
+      {checkboxItems.map(item => {
+        const done = checked.has(item.key);
+        const mins = Math.floor(item.sec / 60);
+        const secs = item.sec % 60;
+        const timeStr = mins > 0 ? `${mins}:${String(secs).padStart(2,"0")}` : `${item.sec}s`;
+        return (
+          <div key={item.key}
+            style={{ ...S.card, display:"flex", alignItems:"flex-start", gap:12, padding:"12px 14px",
+              opacity:done ? 0.45 : 1, cursor:"pointer",
+              border:`1px solid ${done ? "var(--bg4)" : "var(--border)"}` }}
+            onClick={() => toggle(item.key)}>
+            <div style={{ width:22, height:22, borderRadius:4, flexShrink:0, marginTop:2,
+              border:`2px solid ${done ? "var(--green)" : "var(--border)"}`,
+              background:done ? "var(--green)" : "transparent",
+              display:"flex", alignItems:"center", justifyContent:"center" }}>
+              {done && <span style={{ color:"#000", fontSize:13, fontWeight:900 }}>✓</span>}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14,
+                  textDecoration:done ? "line-through" : "none" }}>{item.label}</span>
+                <span style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--amber)", flexShrink:0, marginLeft:8 }}>{timeStr}</span>
+              </div>
+              <div style={{ fontFamily:"var(--font-b)", fontSize:11, color:"var(--muted)", marginTop:3, lineHeight:1.4 }}>{item.cue}</div>
+            </div>
+          </div>
+        );
+      })}
+
+      <button
+        style={{ ...S.btnGreen, width:"100%", justifyContent:"center", marginTop:14,
+          opacity:allDone ? 1 : 0.65 }}
+        onClick={logSession}>
+        {allDone ? "✓ Log Stretch Session" : `Log Session (${checked.size}/${checkboxItems.length} done)`}
+      </button>
+      <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", textAlign:"center", marginTop:6 }}>
+        Saved to history · not synced to Sheets
+      </div>
+    </div>
+  );
+}
+
 // ── Workout Screen ────────────────────────────────────────────────────────────
 function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () => {} }) {
   const day = data.activeDay || (data.split||[])[0] || "Full Body";
@@ -2015,6 +2220,8 @@ Three numbered action items for the next ${day} session. Each must name a specif
       </div>
     </div>
   );
+
+  if (day === "Stretch") return <StretchSession data={data} setData={setData} onBack={onBack} />;
 
   if (finished) return (
     <div style={S.section}>
@@ -2748,7 +2955,8 @@ function CalendarScreen({ data, setData }) {
   const [expandedSession, setExpandedSession] = useState(null); // "date" key
   const history = data.history || [];
   const split = data.split || [];
-  const lastIdx = history[0] ? split.indexOf(history[0].day) : -1;
+  const lastTraining = history.find(h => h.day !== "Stretch");
+  const lastIdx = lastTraining ? split.indexOf(lastTraining.day) : -1;
   const nextDay = split[(lastIdx + 1) % split.length];
 
   // Rolling 28-day window, grouped into Mon-starting weeks
@@ -2771,6 +2979,7 @@ function CalendarScreen({ data, setData }) {
 
   const dayTypeColor = day => {
     const d = day.toLowerCase();
+    if (d === "stretch") return "var(--green)";
     if (d.includes("push") || d.includes("chest") || d.includes("shoulder") || d.includes("arm")) return "var(--amber)";
     if (d.includes("pull") || d.includes("back")) return "var(--blue)";
     if (d.includes("leg") || d.includes("lower")) return "var(--green)";
@@ -2868,7 +3077,12 @@ function CalendarScreen({ data, setData }) {
 
                   {/* Highlights */}
                   <div style={{ flex:1, minWidth:0 }}>
-                    {h.length > 0 ? (
+                    {session.day === "Stretch" ? (
+                      <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--green)" }}>
+                        {session.duration ? `${session.duration} min` : "Stretch"}
+                        {session.focus && STRETCH_ROUTINES[session.focus] ? ` · ${STRETCH_ROUTINES[session.focus].label}` : ""}
+                      </div>
+                    ) : h.length > 0 ? (
                       <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--text)",
                         whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                         {h.map((e,i) => (
@@ -2893,24 +3107,34 @@ function CalendarScreen({ data, setData }) {
                 {isOpen && (
                   <div style={{ padding:"10px 0 14px 52px", borderBottom:"1px solid var(--border)",
                     animation:"fadeUp .2s cubic-bezier(0.16,1,0.3,1) both" }}>
-                    {allSets.map(([name, sets]) => {
-                      const hasSecs = sets.some(s => s.seconds);
-                      const display = hasSecs
-                        ? sets.filter(s=>s.seconds).map(s=>`${s.seconds}s`).join(" / ")
-                        : sets.filter(s=>s.reps).map(s=>`${s.weight||"BW"}×${s.reps}`).join(" / ");
-                      return (
-                        <div key={name} style={{ display:"flex", justifyContent:"space-between",
-                          alignItems:"baseline", marginBottom:5, gap:8 }}>
-                          <span style={{ fontFamily:"var(--font-b)", fontSize:12, color:"var(--muted)",
-                            flexShrink:0, maxWidth:"45%" }}>{name}</span>
-                          <span style={{ fontFamily:"var(--font-m)", fontSize:11,
-                            color:"var(--text)", textAlign:"right" }}>{display}</span>
-                        </div>
-                      );
-                    })}
-                    {session.notes && (
-                      <div style={{ fontFamily:"var(--font-b)", fontSize:12, color:"var(--muted)",
-                        fontStyle:"italic", marginTop:8 }}>"{session.notes}"</div>
+                    {session.day === "Stretch" ? (
+                      <div style={{ fontFamily:"var(--font-m)", fontSize:12, color:"var(--muted)" }}>
+                        {session.focus && STRETCH_ROUTINES[session.focus]
+                          ? `${STRETCH_ROUTINES[session.focus].label} — ${STRETCH_ROUTINES[session.focus].desc}`
+                          : "Mobility session"}
+                      </div>
+                    ) : (
+                      <>
+                        {allSets.map(([name, sets]) => {
+                          const hasSecs = sets.some(s => s.seconds);
+                          const display = hasSecs
+                            ? sets.filter(s=>s.seconds).map(s=>`${s.seconds}s`).join(" / ")
+                            : sets.filter(s=>s.reps).map(s=>`${s.weight||"BW"}×${s.reps}`).join(" / ");
+                          return (
+                            <div key={name} style={{ display:"flex", justifyContent:"space-between",
+                              alignItems:"baseline", marginBottom:5, gap:8 }}>
+                              <span style={{ fontFamily:"var(--font-b)", fontSize:12, color:"var(--muted)",
+                                flexShrink:0, maxWidth:"45%" }}>{name}</span>
+                              <span style={{ fontFamily:"var(--font-m)", fontSize:11,
+                                color:"var(--text)", textAlign:"right" }}>{display}</span>
+                            </div>
+                          );
+                        })}
+                        {session.notes && (
+                          <div style={{ fontFamily:"var(--font-b)", fontSize:12, color:"var(--muted)",
+                            fontStyle:"italic", marginTop:8 }}>"{session.notes}"</div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -3445,15 +3669,16 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
   const [bwSaved, setBwSaved] = useState(false);
   const [selectedDay, setSelectedDay] = useState(null);
 
-  // Smart next day suggestion
+  // Smart next day suggestion (skip stretch sessions for split logic)
+  const lastTrainingSession = history.find(h => h.day !== "Stretch");
   const lastSession = history[0];
-  const lastIdx = lastSession ? split.indexOf(lastSession.day) : -1;
+  const lastIdx = lastTrainingSession ? split.indexOf(lastTrainingSession.day) : -1;
   const suggestedDay = split[(lastIdx + 1) % split.length] || split[0];
   const activeDay = selectedDay || suggestedDay;
 
-  // Days trained this week
+  // Days trained this week (stretch sessions don't count toward weekly target)
   const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay()); weekStart.setHours(0,0,0,0);
-  const thisWeekSessions = history.filter(h => new Date(h.date) >= weekStart);
+  const thisWeekSessions = history.filter(h => new Date(h.date) >= weekStart && h.day !== "Stretch");
   const targetDays = parseInt(data.days) || 3;
 
   // Body weight check — prompt if >7 days since last log
@@ -3801,6 +4026,12 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
 
     <button style={{ ...S.btn, width:"100%", justifyContent:"center", fontSize:16 }} onClick={startSession}>
           Start {activeDay} Session →
+        </button>
+        <button
+          style={{ ...S.btnSm, width:"100%", justifyContent:"center", marginTop:8,
+            color:"var(--green)", border:"1px solid rgba(34,197,94,0.35)", background:"rgba(34,197,94,0.06)" }}
+          onClick={() => { setData(d => ({ ...d, activeDay:"Stretch" })); onStartSession(); }}>
+          🧘 Quick Stretch (10–20 min)
         </button>
       </div>
 
