@@ -420,62 +420,85 @@ const DAY_TEMPLATES = {
 };
 
 // ── Stretch Routines — tailored for age 49, upper-back kyphosis, lumbar disc ──
+// Evidence base:
+//   Kyphosis: PMC12141983 (2025 systematic review), foam rolling meta-analysis
+//   Disc/McKenzie: backintelligence.com, medrxiv McKenzie RCT
+//   Hip flexor+APT: ScienceDirect doi 10.1016/j.jmpt.2020.06.006
+//   Piriformis: spine-health.com, NIH StatPearls
+//   Hold times: Feland 2001 — 60s holds superior for adults ≥60y; ACSM recommends 60s for older adults
 const STRETCH_ROUTINES = {
   upper_back: {
     label: "Upper Back",
-    desc:  "Thoracic extension · pec opener · postural reset",
+    desc:  "Thoracic extension · pec opener · chin tuck · postural reset",
     color: "var(--amber)",
     afterDay: ["Push","Full Body","Full Body A","Upper A","Upper B","Chest","Shoulders","Arms"],
     items: [
-      { name:"Doorway Chest Stretch",     sec:60, sides:true,  cue:"Elbow 90°, stagger feet, lean through — feel across sternum, not neck" },
-      { name:"Thoracic Foam Roller",      sec:90, sides:false, cue:"Hands behind head, let gravity extend you — stop at lower ribs, never roll lumbar" },
-      { name:"Wall Angel",                sec:80, sides:false, cue:"Lower back on wall, ribcage down — slide arms up only as far as wall contact holds (2×8 slow)" },
-      { name:"Thread the Needle",         sec:60, sides:true,  cue:"All-fours, thread arm under — thoracic rotation only, hips stay square" },
-      { name:"Lat Doorway Stretch",       sec:45, sides:true,  cue:"Grab frame at head height, lean back and away — tight lats pull shoulders into that forward posture" },
+      // Foam roller first — mobilises joints, creates ROM window for what follows
+      { name:"Thoracic Foam Roller",      sec:90, sides:false, cue:"Move roller through T4–T8 in 3 segments (~30s each). Hands behind head, let gravity extend you — stop at lower ribs, never roll lumbar" },
+      // Pec stretch — directly counters the kyphotic pull on the anterior shoulder
+      { name:"Doorway Chest Stretch",     sec:60, sides:true,  cue:"Elbow 90°, stagger feet, lean through — feel stretch across chest, not neck. 60s each side" },
+      // Wall angel — ACTIVE lower-trap & serratus exercise, not a passive stretch; reinforces ROM gained from foam roller
+      { name:"Wall Angel",                sec:80, sides:false, cue:"Active exercise: lower back flat on wall, ribcage down, arms slide up — only go as high as wall contact holds. 2×8 slow reps" },
+      // Chin tuck — corrects forward head posture (FHP) which always accompanies thoracic kyphosis
+      { name:"Chin Tuck",                 sec:60, sides:false, cue:"Stand or sit tall, gently retract chin straight back (not down) — feel a stretch at base of skull. 10 reps × 5s hold. Critical: FHP amplifies thoracic curve" },
+      // Thread the needle — only thoracic rotation exercise here, important for 3D mobility
+      { name:"Thread the Needle",         sec:60, sides:true,  cue:"All-fours, thread arm under body — thoracic rotation only, hips stay square and level" },
+      // Lat stretch last — tight lats internally rotate shoulders and contribute to kyphotic posture
+      { name:"Lat Doorway Stretch",       sec:60, sides:true,  cue:"Grab doorframe at head height, lean back and away, slight side bend — tight lats pull shoulders into forward posture" },
     ],
   },
   lower_back: {
     label: "Lower Back",
-    desc:  "Disc decompression · hip flexor · piriformis",
+    desc:  "Disc decompression · hip flexor · piriformis · McKenzie",
     color: "var(--blue)",
     afterDay: ["Legs","Pull","Full Body B","Lower A","Lower B","Back"],
     items: [
-      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Tall torso, squeeze glute of back leg — reduces anterior tilt that directly loads discs" },
-      { name:"Figure-4 Piriformis",       sec:75, sides:true,  cue:"Lying on back, ankle over knee, pull thigh gently — keep lower back flat, never force" },
-      { name:"Cat-Cow Flow",              sec:90, sides:false, cue:"Exhale fully rounding up, inhale sinking down — stop before any lumbar discomfort" },
-      { name:"Prone Extension",           sec:30, sets:3, sides:false, cue:"Face down, prop on forearms, belly sinks to floor — skip if causes leg tingling or radiating pain" },
-      { name:"Knee to Chest",             sec:60, sides:true,  cue:"Gentle pull, other leg straight on floor — decompresses lumbar facets" },
+      // Hip flexor first — most critical for disc: APT creates chronic shearing on L4/L5 discs
+      // KEY: posterior pelvic tilt (PPT) during lunge is mandatory — without PPT you bypass psoas and load the disc
+      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Back knee down. BEFORE leaning: tuck pelvis (squeeze glute of back leg + flatten lower back). Then tall torso. Without this tilt you miss the psoas and load the disc instead. 90s each side" },
+      // Piriformis: 60s hold × 3 per side per Spine-Health protocol; compresses sciatic nerve with disc issues
+      { name:"Figure-4 Piriformis",       sec:60, sides:true,  cue:"Lying on back, cross ankle over opposite knee, gently pull thigh toward chest — 3 × 60s each side. Keep lower back flat, never bounce or force" },
+      // Cat-cow: only exercise combining flexion+extension; stops before pain threshold
+      { name:"Cat-Cow Flow",              sec:90, sides:false, cue:"On all fours, exhale fully as you round up, inhale as you sink down. Slow — 4 seconds each direction. Stop the instant you feel lumbar discomfort" },
+      // McKenzie prone extension: evidence-based for posterior disc herniation (most common type)
+      // Repeated end-range extension moves nucleus anteriorly, reduces radiating pain
+      { name:"Prone Extension (McKenzie)",sec:30, sets:3, sides:false, cue:"Face down, hands under shoulders. Slowly press up letting belly sink — hold 2s at top, lower. 10 press-ups per set. STOP if causes leg tingling or radiating pain below knee" },
+      // Knee to chest last as flexion decompressor
+      { name:"Knee to Chest",             sec:60, sides:true,  cue:"Lying on back, pull one knee gently toward chest — other leg stays straight on floor. Gentle traction on lumbar facets. 60s each side" },
     ],
   },
   hips_legs: {
     label: "Hips & Legs",
-    desc:  "Hip flexors · hamstrings · glute activation",
+    desc:  "Hip flexors · hamstrings (spine-safe) · glute activation",
     color: "var(--green)",
     afterDay: ["Legs","Full Body B","Lower A","Lower B"],
     items: [
-      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Tall torso, squeeze glute of back leg — target the front of the hip, not the knee" },
-      { name:"Figure-4 Piriformis",       sec:75, sides:true,  cue:"Lying on back, ankle over knee, gently pull thigh toward chest" },
-      { name:"Supine Hamstring Stretch",  sec:60, sides:true,  cue:"Loop towel under foot, leg toward ceiling — lower back stays flat on floor throughout" },
-      { name:"Glute Bridge Hold",         sec:60, sides:false, cue:"Hold top position — activates glutes to counter hip flexor dominance" },
-      { name:"Standing Quad Stretch",     sec:30, sides:true,  cue:"Near wall for balance, pull ankle to glute — gentle, no pulling at the knee" },
+      // Same PPT cue as lower_back — consistency matters
+      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Back knee down. Tuck pelvis first (glute squeeze + flatten low back), then lean forward — without posterior tilt you load the lumbar spine instead of stretching psoas. 90s each side" },
+      { name:"Figure-4 Piriformis",       sec:60, sides:true,  cue:"Lying on back, ankle over opposite knee, pull thigh gently — lower back flat on floor, 3 × 60s each side" },
+      // Supine hamstring: spine-safe version — seated toe-touch rounds the lumbar spine (contraindicated with disc)
+      { name:"Supine Hamstring Stretch",  sec:60, sides:true,  cue:"Loop towel around foot, leg toward ceiling — lower back stays FLAT on floor the whole time. Do NOT do seated toe-touch (rounds lumbar disc). 60s each side" },
+      { name:"Glute Bridge Hold",         sec:60, sides:false, cue:"Feet flat, press hips to ceiling and hold. Not a stretch — activates glutes to restore balance after hip flexor dominance. Hold 60s continuous" },
+      { name:"Standing Quad Stretch",     sec:60, sides:true,  cue:"Near wall for balance, pull ankle to glute — keep knees together, no pelvic tilt. 60s each side per ACSM older-adult guidelines" },
     ],
   },
   full_body: {
     label: "Full Body",
-    desc:  "Complete postural reset · upper + lower back",
+    desc:  "Complete postural + disc reset — upper & lower back",
     color: "var(--purple)",
     afterDay: [],
     items: [
-      { name:"Doorway Chest Stretch",     sec:60, sides:true,  cue:"Elbow 90°, stagger feet, lean through — feel across sternum, not neck" },
-      { name:"Thoracic Foam Roller",      sec:90, sides:false, cue:"Hands behind head, gravity extends you — stop at lower ribs, never roll lumbar" },
-      { name:"Wall Angel",                sec:80, sides:false, cue:"Lower back on wall, ribcage down — arms slide up only as far as wall contact holds (2×8)" },
+      { name:"Thoracic Foam Roller",      sec:90, sides:false, cue:"Move through T4–T8 in 3 segments (~30s each). Hands behind head — stop at lower ribs, never roll lumbar" },
+      { name:"Doorway Chest Stretch",     sec:60, sides:true,  cue:"Elbow 90°, stagger feet, lean through — feel stretch across chest not neck. 60s each side" },
+      { name:"Chin Tuck",                 sec:60, sides:false, cue:"Sit or stand tall, retract chin straight back (not down) — 10 reps × 5s hold. Corrects forward head posture that drives kyphosis" },
+      { name:"Wall Angel",                sec:80, sides:false, cue:"Active: lower back on wall, ribcage down — slide arms up only as far as wall contact holds. 2×8 slow reps. Strengthens lower traps" },
       { name:"Thread the Needle",         sec:60, sides:true,  cue:"All-fours, thread arm under — thoracic rotation only, hips stay square" },
-      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Tall torso, squeeze glute of back leg — key for disc health and posture correction" },
-      { name:"Figure-4 Piriformis",       sec:75, sides:true,  cue:"Lying on back, ankle over knee, pull thigh gently — lower back flat throughout" },
-      { name:"Cat-Cow Flow",              sec:90, sides:false, cue:"Exhale fully rounding, inhale sinking — slow and deliberate, stop before discomfort" },
-      { name:"Prone Extension",           sec:30, sets:3, sides:false, cue:"Face down, prop on forearms, belly sinks — skip if causes leg tingling" },
-      { name:"Supine Hamstring Stretch",  sec:60, sides:true,  cue:"Loop towel under foot, leg toward ceiling — lower back stays flat on floor" },
-      { name:"Lat Doorway Stretch",       sec:45, sides:true,  cue:"Grab frame at head height, lean back — tight lats compound forward-shoulder posture" },
+      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Tuck pelvis FIRST (glute squeeze + flatten low back) before leaning — critical for disc safety. 90s each side" },
+      { name:"Figure-4 Piriformis",       sec:60, sides:true,  cue:"Lying, ankle over opposite knee, pull thigh gently — lower back flat, 3 × 60s each side" },
+      { name:"Cat-Cow Flow",              sec:90, sides:false, cue:"Exhale fully rounding, inhale sinking — 4 seconds each direction. Stop before any lumbar discomfort" },
+      { name:"Prone Extension (McKenzie)",sec:30, sets:3, sides:false, cue:"10 slow press-ups per set, hold 2s at top. Stop if causes leg tingling or radiating pain" },
+      { name:"Supine Hamstring Stretch",  sec:60, sides:true,  cue:"Loop towel under foot, leg toward ceiling — lower back FLAT on floor. Never seated toe-touch with disc issues. 60s each side" },
+      { name:"Lat Doorway Stretch",       sec:60, sides:true,  cue:"Grab frame at head height, lean back and away — tight lats drive forward-shoulder kyphotic posture. 60s each side" },
     ],
   },
 };
