@@ -124,8 +124,8 @@ function snapToNearest(arr, val) { return arr.reduce((prev, curr) => Math.abs(cu
 
 const HYPERTROPHY_TARGET_REPS = 8;
 const DUMBBELL_EX = ["Dumbbell Bench Press","Dumbbell Shoulder Press","Dumbbell Row","Dumbbell Curl",
-  "Single-Arm Dumbbell Row","Dumbbell Fly","Romanian Deadlift","Single-Arm DB Press"];
-const BARBELL_EX = ["Barbell Bench Press","Barbell Squat","Barbell Deadlift","Barbell Row","Overhead Press"];
+  "Single-Arm Dumbbell Row","Dumbbell Fly","Single-Arm DB Press"];
+const BARBELL_EX = ["Barbell Bench Press","Barbell Squat","Barbell Deadlift","Barbell Row","Overhead Press","Romanian Deadlift"];
 const EZ_EX = ["EZ Bar Curl","EZ Bar Skull Crusher","EZ Bar Reverse Curl","EZ Bar Upright Row","Close-Grip Bench Press"];
 
 Object.entries(CROSS_RATIOS).forEach(([ex, ratio]) => {

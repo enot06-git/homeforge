@@ -1949,6 +1949,27 @@ function parseAiSections(raw) {
   };
 }
 
+// Parse the [PROPOSALS] block as structured action items.
+// Returns an array of { exercise, field, value, reason } or null if the
+// AI didn't return valid JSON (caller falls back to showing raw text).
+function parseAiProposals(proposalsText) {
+  if (!proposalsText) return null;
+  const cleaned = proposalsText.replace(/```json|```/g, "").trim();
+  if (!cleaned.startsWith("[")) return null;
+  try {
+    const arr = JSON.parse(cleaned);
+    if (!Array.isArray(arr)) return null;
+    return arr.filter(p =>
+      p && typeof p.exercise === "string" &&
+      (p.field === "weight" || p.field === "reps") &&
+      typeof p.value === "number" && isFinite(p.value) &&
+      typeof p.reason === "string"
+    );
+  } catch (e) {
+    return null;
+  }
+}
+
 function AiSection({ label, icon, color, borderColor, bgColor, text, delay }) {
   if (!text || text === "—") return null;
   return (
@@ -1967,8 +1988,33 @@ function AiSection({ label, icon, color, borderColor, bgColor, text, delay }) {
   );
 }
 
-function AiAnalysisPanel({ loading, raw, onGoToChat, day }) {
+function AiProposalCard({ proposal, applied, onApply, onDismiss }) {
+  const valueLabel = proposal.field === "weight" ? `${proposal.value}kg` : `${proposal.value} reps`;
+  return (
+    <div style={{ background:"rgba(59,130,246,0.05)", border:"1px solid rgba(59,130,246,0.3)", borderRadius:8, padding:"10px 12px", marginTop:8 }}>
+      <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:13, color:"var(--text)" }}>
+        {proposal.exercise} <span style={{ color:"var(--blue)" }}>→ {valueLabel}</span>
+      </div>
+      <div style={{ fontFamily:"var(--font-b)", fontSize:12, color:"var(--muted)", marginTop:4, lineHeight:1.5 }}>
+        {proposal.reason}
+      </div>
+      <div style={{ display:"flex", gap:8, marginTop:10 }}>
+        {applied ? (
+          <span style={{ ...S.tag("var(--green)"), padding:"6px 10px" }}>✓ Set as next session's target</span>
+        ) : (
+          <>
+            <button style={{ ...S.btnSm, color:"var(--blue)", borderColor:"rgba(59,130,246,0.4)" }} onClick={onApply}>Apply</button>
+            <button style={S.btnSm} onClick={onDismiss}>Dismiss</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AiAnalysisPanel({ loading, raw, onGoToChat, day, proposalState }) {
   const sections = parseAiSections(raw);
+  const structuredProposals = parseAiProposals(sections.proposals);
   return (
     <div style={{ marginTop:14 }}>
       <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:11, color:"var(--purple)", letterSpacing:2, marginBottom:6 }}>
@@ -2005,15 +2051,38 @@ function AiAnalysisPanel({ loading, raw, onGoToChat, day }) {
             text={sections.trends}
             delay={0.08}
           />
-          <AiSection
-            label={`PROPOSALS — NEXT ${(day || "").toUpperCase()}`}
-            icon="🎯"
-            color="var(--blue)"
-            borderColor="rgba(59,130,246,0.35)"
-            bgColor="rgba(59,130,246,0.05)"
-            text={sections.proposals}
-            delay={0.16}
-          />
+          {structuredProposals ? (
+            structuredProposals.length > 0 && (
+              <div style={{
+                background:"rgba(59,130,246,0.05)", border:"1px solid rgba(59,130,246,0.35)", borderRadius:8,
+                padding:"12px 14px", marginTop:10,
+                animation:"fadeUp .3s 0.16s cubic-bezier(0.16,1,0.3,1) both"
+              }}>
+                <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:11, color:"var(--blue)", letterSpacing:1, marginBottom:4 }}>
+                  🎯 PROPOSALS — NEXT {(day || "").toUpperCase()}
+                </div>
+                {structuredProposals.map((p, i) => proposalState?.dismissed?.has(i) ? null : (
+                  <AiProposalCard
+                    key={i}
+                    proposal={p}
+                    applied={proposalState?.applied?.has(i)}
+                    onApply={() => proposalState?.onApply?.(p, i)}
+                    onDismiss={() => proposalState?.onDismiss?.(i)}
+                  />
+                ))}
+              </div>
+            )
+          ) : (
+            <AiSection
+              label={`PROPOSALS — NEXT ${(day || "").toUpperCase()}`}
+              icon="🎯"
+              color="var(--blue)"
+              borderColor="rgba(59,130,246,0.35)"
+              bgColor="rgba(59,130,246,0.05)"
+              text={sections.proposals}
+              delay={0.16}
+            />
+          )}
           {onGoToChat && (
             <button
               style={{ ...S.btnSm, marginTop:10, fontSize:11, color:"var(--purple)", borderColor:"rgba(168,85,247,0.4)" }}
@@ -2238,6 +2307,30 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
   const [planSaved, setPlanSaved] = useState(false);
   const [aiSummary, setAiSummary] = useState(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [appliedProposals, setAppliedProposals] = useState(() => new Set());
+  const [dismissedProposals, setDismissedProposals] = useState(() => new Set());
+
+  // Apply an AI proposal directly to next session's plan and sync to Sheets
+  const applyAiProposal = (p, idx) => {
+    setData(d => {
+      const dayType = getDayType(day);
+      const current = (d.nextSession?.[dayType] || {})[p.exercise] || {};
+      const updatedExercise = p.field === "reps"
+        ? { ...current, targetReps: p.value, type: "reps", source: "ai_proposal" }
+        : { ...current, targetWeight: p.value, type: "weight", source: "ai_proposal", targetReps: current.targetReps || 8 };
+      const newNextSession = { ...(d.nextSession || {}), [dayType]: { ...(d.nextSession?.[dayType] || {}), [p.exercise]: updatedExercise } };
+      const lastEntry = (d.history || [])[0];
+      if (lastEntry) {
+        setSyncStatus("syncing");
+        syncSession(lastEntry, newNextSession, d.bodyWeightHistory || [])
+          .then(() => setSyncStatus("ok"))
+          .catch(() => setSyncStatus("error"));
+      }
+      return { ...d, nextSession: newNextSession };
+    });
+    setAppliedProposals(prev => new Set(prev).add(idx));
+  };
+  const dismissAiProposal = (idx) => setDismissedProposals(prev => new Set(prev).add(idx));
   const age = parseInt(data.age) || 0;
   const deload = shouldDeload(data.history);
   const warnings = getMuscleWarnings(day, data.history);
@@ -2280,7 +2373,7 @@ One verdict sentence with a specific volume or intensity number. Then 2-3 senten
 2-3 sentences on multi-session patterns. Reference exercise names, volume numbers, and RIR trajectory from the history provided. Note progressions, stalls, or warning signs.
 
 [PROPOSALS]
-Three numbered action items for the next ${day} session. Each must name a specific exercise and include a concrete target (weight, reps, sets, or RIR). No vague advice.`;
+A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 concrete target changes for the next ${day} session. Each item: {"exercise": "<name>", "field": "weight"|"reps", "value": <number>, "reason": "<reason, under 15 words>"}. "exercise" must exactly match one of: ${Object.keys(sessionLog).join(", ")}. Use "field":"weight" for barbell/dumbbell/EZ-bar/dip-belt exercises and "field":"reps" for bodyweight/timed/reps-only exercises. Base values on the rep/RIR data above — call out stalls, overreach, or easy sessions. If no concrete change is warranted, return [].`;
     callClaude([{ role: "user", content: buildSessionSummaryPrompt(entry, data.history || [], data) }], aiSystem)
       .then(text => setAiSummary(text))
       .catch(() => setAiSummary("[SESSION]\nCould not generate analysis — check your connection.\n[TRENDS]\n—\n[PROPOSALS]\n—"))
@@ -2344,7 +2437,8 @@ Three numbered action items for the next ${day} session. Each must name a specif
         </div>
       )}
       {/* AI Coach Full Analysis */}
-      <AiAnalysisPanel loading={aiSummaryLoading} raw={aiSummary} onGoToChat={onGoToChat} day={day} />
+      <AiAnalysisPanel loading={aiSummaryLoading} raw={aiSummary} onGoToChat={onGoToChat} day={day}
+        proposalState={{ applied: appliedProposals, dismissed: dismissedProposals, onApply: applyAiProposal, onDismiss: dismissAiProposal }} />
 
       <button style={{ ...S.btn, width:"100%", justifyContent:"center", marginTop:12 }} onClick={() => setFinished(false)}>Back to Workout</button>
     </div>
@@ -2744,10 +2838,10 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
 
   const isDumbbellEx = (name) => ["Dumbbell Bench Press","Dumbbell Shoulder Press","Dumbbell Row",
     "Dumbbell Curl","Single-Arm Dumbbell Row","Dumbbell Fly","Goblet Squat","Single-Leg RDL",
-    "Tricep Overhead Ext","Clean & Press","Single-Arm DB Press","Romanian Deadlift",
+    "Tricep Overhead Ext","Clean & Press","Single-Arm DB Press",
     "Bulgarian Split Squat","Lunge"].includes(name);
   const isBarbellEx = (name) => ["Barbell Bench Press","Barbell Squat","Barbell Deadlift",
-    "Barbell Row","Overhead Press","Close-Grip Bench Press"].includes(name);
+    "Barbell Row","Overhead Press","Close-Grip Bench Press","Romanian Deadlift"].includes(name);
   const isEZEx = (name) => ["EZ Bar Curl","EZ Bar Skull Crusher","EZ Bar Reverse Curl",
     "EZ Bar Upright Row"].includes(name);
   const isDipBeltEx = (name) => ["Weighted Dip","Weighted Pull-Up","Weighted Chin-Up","Weighted Push-Up"].includes(name);
@@ -2905,10 +2999,10 @@ function getSmartSuggestion(exName, goal, history, profileBaseline, data) {
   if (data?.mesocycle?.phase === "intensification") {
     const isDumbbellEx2 = ["Dumbbell Bench Press","Dumbbell Shoulder Press","Dumbbell Row",
       "Dumbbell Curl","Single-Arm Dumbbell Row","Dumbbell Fly","Goblet Squat","Single-Leg RDL",
-      "Tricep Overhead Ext","Clean & Press","Single-Arm DB Press","Romanian Deadlift",
+      "Tricep Overhead Ext","Clean & Press","Single-Arm DB Press",
       "Bulgarian Split Squat","Lunge"].includes(exName);
     const isBarbellEx2 = ["Barbell Bench Press","Barbell Squat","Barbell Deadlift",
-      "Barbell Row","Overhead Press","Close-Grip Bench Press"].includes(exName);
+      "Barbell Row","Overhead Press","Close-Grip Bench Press","Romanian Deadlift"].includes(exName);
     const isEZEx2      = ["EZ Bar Curl","EZ Bar Skull Crusher","EZ Bar Reverse Curl",
       "EZ Bar Upright Row"].includes(exName);
     const isDipBeltEx2 = ["Weighted Dip","Weighted Pull-Up","Weighted Chin-Up","Weighted Push-Up"].includes(exName);
