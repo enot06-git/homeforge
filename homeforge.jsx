@@ -1412,11 +1412,11 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const _isDeload   = _meso.phase === "deload";
   const _isIntense  = _meso.phase === "intensification";
   const numSets = (isTimed || repOverride) ? effectiveSets : _isDeload ? 2 : rr.sets;
-  const sets = sessionLog[key] || Array.from({ length: numSets }, () => isTimed ? { seconds: "", rpe: "" } : { weight: "", reps: "", rpe: "" });
   const suggestion = useMemo(
     () => getSmartSuggestion(key, goal, history, data.profileBaseline, data),
     [key, goal, history, data.profileBaseline, data.nextSession, data.barWeight, data.barbellPlates, data.ezbarWeight, data.ezbarPlates, data.dumbbellMax]
   );
+  const sets = sessionLog[key] || Array.from({ length: numSets }, () => isTimed ? { seconds: "", rpe: "" } : { weight: suggestion?.weight || "", reps: "", rpe: "" });
   const weightDisplay = suggestion?.weight ? formatWeightDisplay(key, suggestion.weight, data) : null;
 
   const prevSession = (history || []).find(h => h.log?.[key]);
