@@ -65,7 +65,7 @@ function calcPlates(targetTotal, barWeight, plateStr) {
   const bar = parseFloat(barWeight) || 14;
   const plates = parsePlates(plateStr);
   let remaining = (targetTotal - bar) / 2; // weight per side
-  if (remaining <= 0) return { total: bar, plates: [], perSide: [] };
+  if (remaining <= 0) return { total: bar, plates: [], perSide: [], bar };
   const used = [];
   for (const p of plates) {
     if (remaining <= 0) break;
@@ -1751,7 +1751,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
                     <span style={{ fontFamily:"var(--font-m)", fontSize:12, color:"var(--muted)", flex:1 }}>
                       {wuDisplay?.total ?? ws.kg}kg × {ws.reps}
                     </span>
-                    {wuDisplay?.detail && <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--border)" }}>{wuDisplay.detail}</span>}
+                    {wuDisplay?.detail && <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)" }}>{wuDisplay.detail}</span>}
                     <span style={S.tag("var(--blue)")}>{ws.pct}</span>
                   </div>
                 );
@@ -1798,7 +1798,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
                   {!repOverride && (
                     <>
                       <input style={{ ...S.input, flex:2 }} type="number"
-                        placeholder={prevSets[i]?.weight || suggestion?.weight || "kg"} value={set.weight||""}
+                        placeholder={suggestion?.weight || prevSets[i]?.weight || "kg"} value={set.weight||""}
                         onChange={e => updateSet(i,"weight",e.target.value)} />
                       <span style={{ color:"var(--muted)", fontSize:11 }}>×</span>
                     </>
