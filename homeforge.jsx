@@ -1566,8 +1566,12 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   );
   // A rep-target plan (bodyweight / TRX / reps-only progression) beats the
   // static rep range — that is how those modes actually progress.
-  const plannedReps   = suggestion?.source === "planned" && !suggestion?.weight ? suggestion.reps : null;
+  const isPlanned     = suggestion?.source === "planned" || suggestion?.source === "ai_planned";
+  const plannedReps   = isPlanned && !suggestion?.weight ? suggestion.reps : null;
   const effectiveReps = plannedReps || repOverride || rr.reps;
+  // Bottom of the target range — what the set input hints at, so the box agrees
+  // with TODAY'S TARGET rather than echoing last session's rep count.
+  const repsHint      = String(effectiveReps).split("-")[0];
   const sets = sessionLog[key] || Array.from({ length: numSets }, () => isTimed ? { seconds: "", rpe: "" } : { weight: suggestion?.weight || "", reps: "", rpe: "" });
   const weightDisplay = suggestion?.weight ? formatWeightDisplay(key, suggestion.weight, data) : null;
 
@@ -1744,6 +1748,9 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
       <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--amber)", letterSpacing:1 }}>TODAY'S TARGET</div>
       {suggestion?.source === "planned" && (
         <span style={{ display:"inline-block", padding:"2px 6px", borderRadius:4, background:"rgba(34,197,94,0.13)", color:"var(--green)", fontFamily:"var(--font-m)", fontSize:10 }}>📋 RIR-planned</span>
+      )}
+      {suggestion?.source === "ai_planned" && (
+        <span style={{ display:"inline-block", padding:"2px 6px", borderRadius:4, background:"rgba(168,85,247,0.13)", color:"var(--purple)", fontFamily:"var(--font-m)", fontSize:10 }}>🤖 AI-adjusted</span>
       )}
     </div>
         <div style={{ display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap" }}>
@@ -1963,7 +1970,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
                     </>
                   )}
                   <input style={{ ...S.input, flex:1.5 }} type="number"
-                    placeholder={prevSets[i]?.reps || effectiveReps} value={set.reps||""}
+                    placeholder={repsHint} value={set.reps||""}
                     onChange={e => updateSet(i,"reps",e.target.value)} />
                   {!repsOnly && (
                     <input style={{ ...S.input, flex:1, borderColor:rirColor(set.rpe) }} type="number"
@@ -2487,9 +2494,13 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
       const current = (d.nextSession?.[bucket] || {})[p.exercise] || {};
       // TRX/BW modes have no weight field, so any proposal there is a rep target.
       const field   = isWeights ? p.field : "reps";
+      // Drop targetRIR: it described the RIR-derived target this proposal is
+      // replacing, and carrying it over made an AI-chosen load look like your
+      // own RIR produced it.
+      const { targetRIR: _staleRIR, ...carried } = current;
       const updatedExercise = field === "reps"
-        ? { ...current, targetReps: p.value, type: "reps", source: "ai_proposal" }
-        : { ...current, targetWeight: p.value, type: "weight", source: "ai_proposal", targetReps: current.targetReps || 8 };
+        ? { ...carried, targetReps: p.value, type: "reps", source: "ai_proposal" }
+        : { ...carried, targetWeight: p.value, type: "weight", source: "ai_proposal", targetReps: carried.targetReps || 8 };
       const newNextSession = { ...(d.nextSession || {}), [bucket]: { ...(d.nextSession?.[bucket] || {}), [p.exercise]: updatedExercise } };
       const lastEntry = (d.history || [])[0];
       if (lastEntry) {
@@ -2984,6 +2995,32 @@ const TECHNIQUE = {
   "EZ Bar Complex":        ["Move between exercises without putting bar down","Row → curl → overhead press in sequence","Light weight — fatigue accumulates fast"],
   "Thruster":              ["Front rack position: elbows high, bar on shoulders","Squat, then use momentum to press at top","One fluid movement — not squat then press"],
   "Resistance Band Press": ["Anchor band behind you at chest height","Step forward for more tension, back for less","Control the return — don't let band snap back"],
+
+  // ── TRX / suspension ──
+  // Load is set by body angle, not plates: walk the feet forward to make a
+  // press harder or a row easier, and back to reverse it.
+  "TRX Chest Press":       ["Straps at mid-length, hands under shoulders, body rigid plank","Lower until hands are level with your chest, elbows 45° not flared","Walk feet forward to make it harder, step back to make it easier"],
+  "TRX Chest Fly":         ["Arms wide with a soft, fixed elbow bend — don't let it change","Open only to a comfortable chest stretch, never past shoulder line","Smaller range than you think — shoulder joint is exposed here"],
+  "TRX Tricep Extension":  ["Face away from anchor, hands overhead, elbows pointing forward","Only the forearms move — upper arms stay locked in place","Keep ribs down; if the lower back arches, stand more upright"],
+  "TRX Pike Push-Up":      ["Feet in foot cradles, body in a push-up plank","Pike the hips high first, then lower the crown of the head down","Straps will wobble — brace hard and slow the tempo"],
+  "TRX Low Row":           ["Palms facing each other, body straight, heels planted","Pull elbows past your ribs, squeeze shoulder blades together","Walk feet forward to increase load — more horizontal is harder"],
+  "TRX High Row":          ["Anchor high, elbows flare wide at shoulder height","Pull hands toward your forehead, not your chest","Targets rear delts and mid-traps — go lighter and slower than a low row"],
+  "TRX Y-Fly":             ["Arms sweep overhead into a Y, thumbs up","Lead with the outside of the hands, keep elbows nearly straight","Small range done well beats a big range with shrugging"],
+  "TRX Bicep Curl":        ["Palms up, elbows locked high at shoulder height","Curl your hands toward your forehead, elbows never drop","Body stays a rigid plank — no hinging at the hips"],
+  "TRX Squat":             ["Hold straps at chest, arms light — they guide, not pull","Sit back and down, chest tall, knees tracking over toes","Use the straps only for balance so the legs keep doing the work"],
+  "TRX Bulgarian Split Squat":["Rear foot in the cradle, front foot far enough forward","Drop straight down, front shin near vertical, torso tall","Front knee stays over mid-foot — don't let it cave inward"],
+  "TRX Hamstring Curl":    ["Lie on your back, heels in the cradles, arms flat on floor","Bridge hips up FIRST, then curl heels toward your glutes","Hips stay high the whole set — dropping them kills the tension"],
+  "TRX Hip Hinge":         ["Straps at mid-length, hinge back at the hips, not the spine","Feel the stretch in the hamstrings, back stays flat","Finish by squeezing glutes — stand tall, don't overextend"],
+  "TRX Squat to Row":      ["Squat down first, arms extended, then row as you stand","One smooth movement — legs drive, arms finish","Great conditioning: keep rest short and rhythm steady"],
+  "TRX Burpee":            ["Feet in cradles, start in plank, tuck knees to chest","Push hips up into a pike, then extend back to plank","Control the return — the straps punish sloppy reps"],
+  "TRX Mountain Climber":  ["Feet in cradles, hands under shoulders, hips level","Drive one knee to chest, keep hips from bouncing up","Straps make this far less stable — slower is stronger here"],
+  "TRX Plank":             ["Forearms on floor, feet in cradles, body one straight line","Squeeze glutes and brace abs to stop the straps swinging","Stop the set when the hips start to sag — quality over clock"],
+  "TRX Pike":              ["Start in a plank with feet in the cradles","Lift hips toward the ceiling, legs straight, head between arms","Return to plank slowly — no collapsing back down"],
+  "TRX Body Saw":          ["Forearm plank with feet in cradles, body rigid","Push the floor away to slide back, then pull forward","Move only a few inches — the smaller the saw, the harder the brace"],
+
+  // ── Bodyweight additions ──
+  "Superman Hold":         ["Face down, arms extended forward, legs straight","Lift arms, chest and thighs off the floor together","Look at the floor to keep the neck neutral — don't crane up"],
+  "Hollow Hold":           ["Lower back pressed flat into the floor — this is the whole exercise","Arms overhead, legs straight, both lifted just off the ground","If the back lifts, bend the knees or raise the legs higher"],
 };
 
 // ── 1RM & cross-exercise estimation ──────────────────────────────────────────
@@ -3162,7 +3199,25 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
 
   return { dayType, plan };
 }
+// Public entry point. Every suggestion is rounded to a load the plates on hand
+// can actually build, so TODAY'S TARGET, the pre-filled set input and the plate
+// breakdown underneath it always quote the same number. Without this the card
+// showed the achievable 84.0kg while the input pre-filled the raw target 86.0kg.
 function getSmartSuggestion(exName, goal, history, profileBaseline, data) {
+  const s = getSmartSuggestionRaw(exName, goal, history, profileBaseline, data);
+  if (!s || !s.weight) return s;
+  const raw  = parseFloat(s.weight);
+  const disp = formatWeightDisplay(exName, s.weight, data);
+  // Only bar-loaded lifts are plate-constrained; dumbbells are snapped upstream.
+  if (!raw || !disp || (disp.type !== "barbell" && disp.type !== "ezbar")) return s;
+  const snapped = parseFloat(disp.total);
+  if (!snapped || Math.abs(snapped - raw) < 0.05) return s;
+  // 1RM is linear in load under Epley, so scale rather than recompute.
+  return { ...s, weight: snapped.toFixed(1), snappedFrom: raw.toFixed(1),
+           oneRM: s.oneRM ? Math.round(s.oneRM * snapped / raw) : s.oneRM };
+}
+
+function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
   const rr = REP_RANGES[goal] || REP_RANGES.general;
   const targetReps = parseInt(rr.reps.split("-")[0]);
   const dbMax = parseFloat(data?.dumbbellMax) || 24;
@@ -3211,10 +3266,15 @@ function getSmartSuggestion(exName, goal, history, profileBaseline, data) {
         // A load target is only ever honoured in weights mode, even if a stale
         // one somehow sits in a TRX/BW bucket.
         if (p.type === "weight" && p.targetWeight && isWeightsMode(activeMode))
-          return { weight: p.targetWeight.toFixed(1), reps: rr.reps, source:"planned",
-            oneRM: calc1RM(p.targetWeight, p.targetReps), planRIR: p.targetRIR };
+          // Report where the target actually came from. planRIR is only set for
+          // RIR-derived plans, so an AI-adjusted load never claims to be one.
+          return { weight: p.targetWeight.toFixed(1), reps: rr.reps,
+            source: p.source === "ai_proposal" ? "ai_planned" : "planned",
+            oneRM: calc1RM(p.targetWeight, p.targetReps),
+            planRIR: p.source === "ai_proposal" ? undefined : p.targetRIR };
         if (p.type === "reps")
-          return { weight: null, reps: String(p.targetReps), source:"planned", oneRM: null };
+          return { weight: null, reps: String(p.targetReps), oneRM: null,
+            source: p.source === "ai_proposal" ? "ai_planned" : "planned" };
       }
     }
   }

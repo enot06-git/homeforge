@@ -34,6 +34,7 @@ export const __t = {
   getExercisesForDay, getExercisesForMode, getBestRecord,
   getBestFromLastTwoSameDaySessions, getSmartSuggestion, calcNextSessionPlan,
   dedupHistory, detectRecentPR, shouldDeload, reconcileMesocycle, getDayType,
+  formatWeightDisplay, calcPlates, TECHNIQUE, EXERCISE_DB,
 };
 `;
 
@@ -139,7 +140,9 @@ const poisoned = { ...DATA, activeMode:"weights", nextSession: {
   "push":    { "Barbell Bench Press": { targetWeight:65, targetReps:10, targetRIR:2, type:"weight", source:"rir" } },
 }};
 const sug = T.getSmartSuggestion("Barbell Bench Press","hypertrophy",hist,null,poisoned);
-eq("weights mode reads only the weights bucket", {w:sug.weight, src:sug.source}, {w:"65.0", src:"planned"});
+// 65kg is not buildable with these plates, so it snaps down to 64.0 (see TEST 13).
+eq("weights mode reads only the weights bucket", {w:sug.weight, src:sug.source}, {w:"64.0", src:"planned"});
+eq("...and it is the weights plan being read, not the bw one", sug.snappedFrom, "65.0");
 const bwView = T.getSmartSuggestion("Barbell Bench Press","hypertrophy",hist,null,{...poisoned, activeMode:"bw"});
 eq("bw mode reads only the bw bucket", {w:bwView.weight, r:bwView.reps, src:bwView.source}, {w:null,r:"45",src:"planned"});
 const onlyBw = { ...DATA, activeMode:"weights", nextSession:{ "bw:push": { "Barbell Bench Press": {targetReps:45,type:"reps"} } } };
@@ -203,6 +206,64 @@ const unmapped = Object.values(T.MODE_EXERCISE_DB)
   .filter(ex => !T.EXERCISE_TO_MUSCLE_GROUP[ex.name])
   .map(ex => ex.name);
 eq("every mode exercise has a muscle group", unmapped, []);
+
+// ── Test 13: target / pre-fill / plate breakdown all agree ────────────────────
+// Regression: TODAY'S TARGET showed the achievable 84.0kg while the set input
+// pre-filled the raw target 86.0kg, and the plate line under the input still
+// described 84.0kg worth of plates.
+console.log("\n📋 TEST 13: Suggested Load Matches What The Plates Can Build");
+const PLATE_DATA = { ...DATA, activeMode:"weights",
+  nextSession:{ push:{ "Barbell Squat":{ targetWeight:86, targetReps:7, targetRIR:3, type:"weight", source:"rir" } } } };
+const sq = T.getSmartSuggestion("Barbell Squat","hypertrophy",[],null,PLATE_DATA);
+eq("86kg target snaps to the achievable 84.0kg", sq.weight, "84.0");
+eq("the raw target is retained for reference", sq.snappedFrom, "86.0");
+const sqDisp = T.formatWeightDisplay("Barbell Squat", sq.weight, PLATE_DATA);
+eq("plate breakdown totals the same number", sqDisp.total, sq.weight);
+eq("1RM tag is scaled to the snapped load", sq.oneRM, Math.round(106 * 84 / 86));
+
+// Every plate-loaded suggestion must be self-consistent, across many targets.
+const barLifts = ["Barbell Squat","Barbell Bench Press","Barbell Deadlift","Overhead Press","EZ Bar Curl"];
+const incoherent = [];
+for (const ex of barLifts) {
+  for (const target of [22,37.5,48,61,73.7,86,99,118]) {
+    const key = T.getDayType("Push");
+    const d = { ...DATA, activeMode:"weights", nextSession:{ [key]:{ [ex]:{ targetWeight:target, targetReps:8, type:"weight" } } } };
+    const s = T.getSmartSuggestion(ex,"hypertrophy",[],null,d);
+    const disp = T.formatWeightDisplay(ex, s.weight, d);
+    if (disp.total !== s.weight) incoherent.push(`${ex}@${target}: suggested ${s.weight}, plates build ${disp.total}`);
+  }
+}
+eq("suggested load == plate breakdown for every bar lift/target", incoherent, []);
+ok("dumbbell suggestions are left alone (snapped upstream)",
+   T.getSmartSuggestion("Dumbbell Curl","hypertrophy",[],{"Dumbbell Curl":{weight:10,reps:10}},{...DATA,activeMode:"weights"}).snappedFrom === undefined);
+
+// ── Test 14: an AI-adjusted target must not masquerade as RIR-planned ─────────
+// Applying an AI proposal overwrites the RIR-derived target but used to keep its
+// targetRIR, so the card showed "RIR-planned / last session avg RIR 3 → adjusted"
+// for a number your RIR never produced.
+console.log("\n📋 TEST 14: AI-Adjusted Targets Label Themselves Honestly");
+const aiPlan = { ...DATA, activeMode:"weights",
+  nextSession:{ push:{ "Barbell Squat":{ targetWeight:89, targetReps:7, type:"weight", source:"ai_proposal" } } } };
+const aiSug = T.getSmartSuggestion("Barbell Squat","hypertrophy",[],null,aiPlan);
+eq("source is ai_planned, not planned", aiSug.source, "ai_planned");
+eq("no planRIR is claimed for an AI target", aiSug.planRIR, undefined);
+const rirPlan = { ...DATA, activeMode:"weights",
+  nextSession:{ push:{ "Barbell Squat":{ targetWeight:89, targetReps:7, targetRIR:3, type:"weight", source:"rir" } } } };
+const rirSug = T.getSmartSuggestion("Barbell Squat","hypertrophy",[],null,rirPlan);
+eq("a genuine RIR plan still reports planned", rirSug.source, "planned");
+eq("...and still surfaces its RIR", rirSug.planRIR, 3);
+eq("89kg is buildable, so it is not snapped", rirSug.weight, "89.0");
+const aiReps = { ...DATA, activeMode:"bw",
+  nextSession:{ "bw:push":{ "Push-Up":{ targetReps:32, type:"reps", source:"ai_proposal" } } } };
+eq("rep-target AI proposals label themselves too",
+   T.getSmartSuggestion("Push-Up","hypertrophy",[],null,aiReps).source, "ai_planned");
+
+// ── Test 15: technique cue coverage ───────────────────────────────────────────
+console.log("\n📋 TEST 15: Technique Cues Cover Every Exercise");
+const modeExercises = [...new Set(Object.values(T.MODE_EXERCISE_DB).flatMap(db => Object.values(db).flat()).map(e => e.name))];
+eq("every TRX/BW mode exercise has technique cues", modeExercises.filter(n => !T.TECHNIQUE[n]), []);
+const badCues = modeExercises.filter(n => !Array.isArray(T.TECHNIQUE[n]) || T.TECHNIQUE[n].length < 3);
+eq("each has at least 3 cues", badCues, []);
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log("\n" + "═".repeat(60));
