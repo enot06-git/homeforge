@@ -247,6 +247,111 @@ const EXERCISE_DB = {
   ],
 };
 
+// ── Workout modes ─────────────────────────────────────────────────────────────
+// Weights mode drives load progression. TRX and Bodyweight modes log reps + RIR
+// only — their sessions are tagged with `mode` and are excluded from every
+// weight-based calculation so they can never move a barbell/dumbbell target.
+const WORKOUT_MODES = [
+  { id:"weights", icon:"🏋️", label:"Weights", desc:"Load progression" },
+  { id:"trx",     icon:"🪢", label:"TRX",     desc:"Reps + RIR" },
+  { id:"bw",      icon:"🤸", label:"BW",      desc:"Reps + RIR" },
+];
+
+const DEFAULT_MODE = "weights";
+const isWeightsMode = (mode) => !mode || mode === "weights";
+const modeLabel = (mode) => (WORKOUT_MODES.find(m => m.id === (mode || DEFAULT_MODE)) || WORKOUT_MODES[0]).label;
+
+// Sessions that are allowed to influence weight progression.
+// Legacy sessions have no `mode` field and count as weights.
+const weightsHistory = (history) => (history || []).filter(h => isWeightsMode(h.mode));
+// Sessions belonging to one mode — used for "last session" and rep progression.
+const historyForMode = (history, mode) =>
+  (history || []).filter(h => (h.mode || DEFAULT_MODE) === (mode || DEFAULT_MODE));
+
+// Where a next-session plan lives. Weights keeps the bare dayType key it always
+// used (so existing stored plans keep working); other modes get their own
+// namespace, which is what stops a TRX session from re-targeting a barbell.
+const planKeyFor = (dayType, mode) => isWeightsMode(mode) ? dayType : `${mode}:${dayType}`;
+
+// Alternative exercise lists per mode, keyed by the same categories as SPLIT_MAP
+// so every split (Push/Pull/Legs, Upper/Lower, Full Body …) resolves for free.
+// `repOverride` is what makes ExerciseCard drop the weight input and keep reps+RIR.
+const MODE_EXERCISE_DB = {
+  trx: {
+    Push:[
+      { name:"TRX Chest Press",      eq:["trx"], muscle:"Chest",           unilateral:false, repOverride:"8-15"  },
+      { name:"TRX Chest Fly",        eq:["trx"], muscle:"Chest",           unilateral:false, repOverride:"10-15" },
+      { name:"TRX Tricep Extension", eq:["trx"], muscle:"Triceps",         unilateral:false, repOverride:"10-15" },
+      { name:"TRX Pike Push-Up",     eq:["trx"], muscle:"Shoulders",       unilateral:false, repOverride:"8-12"  },
+    ],
+    Pull:[
+      { name:"TRX Low Row",          eq:["trx"], muscle:"Back",            unilateral:false, repOverride:"8-15"  },
+      { name:"TRX High Row",         eq:["trx"], muscle:"Upper Back",      unilateral:false, repOverride:"10-15" },
+      { name:"TRX Y-Fly",            eq:["trx"], muscle:"Rear Delt",       unilateral:false, repOverride:"12-15" },
+      { name:"TRX Bicep Curl",       eq:["trx"], muscle:"Biceps",          unilateral:false, repOverride:"10-15" },
+    ],
+    Legs:[
+      { name:"TRX Squat",            eq:["trx"], muscle:"Quads/Glutes",    unilateral:false, repOverride:"12-20" },
+      { name:"TRX Bulgarian Split Squat", eq:["trx"], muscle:"Quads",      unilateral:true,  repOverride:"8-12"  },
+      { name:"TRX Hamstring Curl",   eq:["trx"], muscle:"Hamstrings",      unilateral:false, repOverride:"10-15" },
+      { name:"TRX Hip Hinge",        eq:["trx"], muscle:"Glutes",          unilateral:false, repOverride:"12-15" },
+    ],
+    Upper:[
+      { name:"TRX Chest Press",      eq:["trx"], muscle:"Chest",           unilateral:false, repOverride:"8-15"  },
+      { name:"TRX Low Row",          eq:["trx"], muscle:"Back",            unilateral:false, repOverride:"8-15"  },
+      { name:"TRX Y-Fly",            eq:["trx"], muscle:"Rear Delt",       unilateral:false, repOverride:"12-15" },
+      { name:"TRX Bicep Curl",       eq:["trx"], muscle:"Biceps",          unilateral:false, repOverride:"10-15" },
+    ],
+    "Full Body":[
+      { name:"TRX Squat to Row",     eq:["trx"], muscle:"Full Body",       unilateral:false, repOverride:"10-15" },
+      { name:"TRX Burpee",           eq:["trx"], muscle:"Full Body",       unilateral:false, repOverride:"8-12"  },
+      { name:"TRX Mountain Climber", eq:["trx"], muscle:"Core/Cardio",     unilateral:false, timed:true, timedSec:30 },
+    ],
+    Core:[
+      { name:"TRX Plank",            eq:["trx"], muscle:"Core",            unilateral:false, timed:true, timedSec:45 },
+      { name:"TRX Pike",             eq:["trx"], muscle:"Core",            unilateral:false, repOverride:"8-15"  },
+      { name:"TRX Body Saw",         eq:["trx"], muscle:"Core",            unilateral:false, repOverride:"8-12"  },
+    ],
+  },
+  bw: {
+    Push:[
+      { name:"Push-Up",              eq:["bodyweight"],             muscle:"Chest/Triceps", unilateral:false, repOverride:"10-25" },
+      { name:"Pike Push-Up",         eq:["bodyweight"],             muscle:"Shoulders",     unilateral:false, repOverride:"8-15"  },
+      { name:"Diamond Push-Up",      eq:["bodyweight"],             muscle:"Triceps",       unilateral:false, repOverride:"8-20"  },
+      { name:"Tricep Dips",          eq:["pullupbar","bodyweight"], muscle:"Triceps",       unilateral:false, repOverride:"8-20"  },
+    ],
+    Pull:[
+      { name:"Pull-Up",              eq:["pullupbar"],              muscle:"Back/Biceps",   unilateral:false, repOverride:"4-12"  },
+      { name:"Chin-Up",              eq:["pullupbar"],              muscle:"Biceps/Back",   unilateral:false, repOverride:"4-12"  },
+      { name:"Inverted Row",         eq:["pullupbar","bodyweight"], muscle:"Upper Back",    unilateral:false, repOverride:"8-20"  },
+      { name:"Superman Hold",        eq:["bodyweight","mat"],       muscle:"Back",          unilateral:false, timed:true, timedSec:45 },
+    ],
+    Legs:[
+      { name:"Squat",                eq:["bodyweight"],             muscle:"Quads/Glutes",  unilateral:false, repOverride:"15-30" },
+      { name:"Bulgarian Split Squat",eq:["bodyweight","bench"],     muscle:"Quads",         unilateral:true,  repOverride:"8-15"  },
+      { name:"Lunge",                eq:["bodyweight"],             muscle:"Quads/Glutes",  unilateral:true,  repOverride:"10-20" },
+      { name:"Single-Leg Glute Bridge", eq:["bodyweight","mat"],    muscle:"Glutes",        unilateral:true,  repOverride:"10-20" },
+      { name:"Calf Raise",           eq:["bodyweight"],             muscle:"Calves",        unilateral:false, repOverride:"15-25" },
+    ],
+    Upper:[
+      { name:"Push-Up",              eq:["bodyweight"],             muscle:"Chest/Triceps", unilateral:false, repOverride:"10-25" },
+      { name:"Inverted Row",         eq:["pullupbar","bodyweight"], muscle:"Upper Back",    unilateral:false, repOverride:"8-20"  },
+      { name:"Pike Push-Up",         eq:["bodyweight"],             muscle:"Shoulders",     unilateral:false, repOverride:"8-15"  },
+      { name:"Chin-Up",              eq:["pullupbar"],              muscle:"Biceps/Back",   unilateral:false, repOverride:"4-12"  },
+    ],
+    "Full Body":[
+      { name:"Burpee",               eq:["bodyweight"],             muscle:"Full Body",     unilateral:false, repOverride:"8-15"  },
+      { name:"Mountain Climber",     eq:["bodyweight","mat"],       muscle:"Core/Cardio",   unilateral:false, timed:true, timedSec:30 },
+    ],
+    Core:[
+      { name:"Plank",                eq:["bodyweight","mat"],       muscle:"Core",          unilateral:false, timed:true, timedSec:60 },
+      { name:"Dead Bug",             eq:["bodyweight","mat"],       muscle:"Core",          unilateral:false, repOverride:"20-30" },
+      { name:"Hollow Hold",          eq:["bodyweight","mat"],       muscle:"Core",          unilateral:false, timed:true, timedSec:40 },
+      { name:"Bicycle Crunch",       eq:["bodyweight","mat"],       muscle:"Core",          unilateral:false, repOverride:"20-30" },
+    ],
+  },
+};
+
 const REFERENCE_EXERCISES = [
   { name:"Push-Up",             eq:"bodyweight",  type:"reps" },
   { name:"Pull-Up",             eq:"pullupbar",   type:"reps" },
@@ -266,7 +371,11 @@ const REFERENCE_EXERCISES = [
 // ── Exercise → primary muscle group lookup ────────────────────────────────────
 const EXERCISE_TO_MUSCLE_GROUP = (() => {
   const map = {};
-  Object.values(EXERCISE_DB).flat().forEach(ex => {
+  const all = [
+    ...Object.values(EXERCISE_DB).flat(),
+    ...Object.values(MODE_EXERCISE_DB).flatMap(db => Object.values(db).flat()),
+  ];
+  all.forEach(ex => {
     const m = ex.muscle.toLowerCase();
     let g = "core";
     if (m.includes("chest"))                        g = "chest";
@@ -526,7 +635,8 @@ function getStretchItems(focus, totalMinutes) {
 // ── Trend detection ─────────────────────────────────────────────────────────
 function detectTrends(day, history) {
   const flags = [];
-  const sameDaySessions = (history || [])
+  // Weights-mode only — trends here are about load stalls and volume drops.
+  const sameDaySessions = weightsHistory(history)
     .filter(h => h.day === day)
     .slice(0, 4); // last 4 same-day sessions
 
@@ -592,9 +702,10 @@ function getWeeklyVolumes(history, numWeeks = 6) {
 
 // ── PR detection — did last session beat any prior best? ─────────────────────
 function detectRecentPR(history) {
-  if ((history || []).length < 2) return null;
-  const last = history[0];
-  const prior = history.slice(1);
+  const loaded = weightsHistory(history);
+  if (loaded.length < 2) return null;
+  const last = loaded[0];
+  const prior = loaded.slice(1);
   for (const [name, sets] of Object.entries(last.log || {})) {
     const bestWeight = Math.max(0, ...sets.map(s => parseFloat(s.weight) || 0));
     if (bestWeight <= 0) continue;
@@ -625,7 +736,8 @@ function reconcileMesocycle(mesocycle, history) {
   const m = initMesocycle(mesocycle);
   if (m.sessionCount > 0 || !history || history.length === 0) return m;
   const phaseLen = PHASE_LENGTHS[m.phase] || 12;
-  const trainingSessions = history.filter(h => h.day !== "Stretch");
+  // Mesocycle phases track the lifting block only.
+  const trainingSessions = weightsHistory(history).filter(h => h.day !== "Stretch");
   const count = m.startDate
     ? trainingSessions.filter(h => String(h.date).slice(0, 10) >= m.startDate).length
     : Math.min(trainingSessions.length, phaseLen);
@@ -655,7 +767,7 @@ function phaseColor(phase) {
 
 // Get best set from last 2 same-day sessions for intensification 1RM calc
 function getBestFromLastTwoSameDaySessions(exName, day, history, profileBaseline) {
-  const sameDaySessions = (history || []).filter(h => h.day === day && h.log?.[exName]);
+  const sameDaySessions = weightsHistory(history).filter(h => h.day === day && h.log?.[exName]);
   const last2 = sameDaySessions.slice(0, 2);
   let bestWeight = 0, bestReps = 0;
   last2.forEach(session => {
@@ -674,8 +786,28 @@ function getBestFromLastTwoSameDaySessions(exName, day, history, profileBaseline
   return { weight: bestWeight, reps: bestReps };
 }
 
-function getExercisesForDay(day, equipment, goal, favourites, level) {
+// Build a TRX / bodyweight day from the SPLIT_MAP categories for that day, so
+// every split name resolves without needing a per-day template.
+function getExercisesForMode(day, mode, equipment) {
+  const db = MODE_EXERCISE_DB[mode];
+  if (!db) return [];
+  const cats = SPLIT_MAP[day]?.length ? SPLIT_MAP[day] : ["Full Body","Core"];
+  const eqList = equipment || [];
+  const out = []; const seen = new Set();
+  cats.forEach(cat => {
+    const pool = db[cat] || [];
+    // TRX is opt-in via the mode switch itself, so only bodyweight is equipment-gated.
+    const usable = mode === "bw" ? pool.filter(ex => ex.eq.some(e => eqList.includes(e))) : pool;
+    (usable.length ? usable : pool).slice(0, cat === "Core" ? 2 : 3).forEach(ex => {
+      if (!seen.has(ex.name)) { seen.add(ex.name); out.push({ ...ex, isFav:false }); }
+    });
+  });
+  return out;
+}
+
+function getExercisesForDay(day, equipment, goal, favourites, level, mode) {
   if (day === "REST" || day === "Stretch") return [];
+  if (!isWeightsMode(mode)) return getExercisesForMode(day, mode, equipment);
 
   const template = DAY_TEMPLATES[day];
   const allFavs = Object.values(favourites||{}).flat();
@@ -722,9 +854,11 @@ function getExercisesForDay(day, equipment, goal, favourites, level) {
   return exercises;
 }
 
+// Weight records come from weights-mode sessions only — a TRX or bodyweight
+// session must never establish or raise a loaded best.
 function getBestRecord(exName, history, profileBaseline) {
   let bestWeight = 0, bestReps = 0;
-  (history || []).forEach(session => {
+  weightsHistory(history).forEach(session => {
     (session.log?.[exName] || []).forEach(set => {
       const w = parseFloat(set.weight) || 0;
       const r = parseInt(set.reps) || 0;
@@ -768,11 +902,13 @@ function getMuscleWarnings(day, history) {
 }
 
 function shouldDeload(history) {
-  if (!history || history.length < 4) return false;
-  const v = history.slice(0, 4).map(h => h.volume || 0);
+  // Volume-based, so only weights sessions count (TRX/BW log volume 0).
+  const loaded = weightsHistory(history);
+  if (loaded.length < 4) return false;
+  const v = loaded.slice(0, 4).map(h => h.volume || 0);
   if (v[0] < v[1] && v[1] < v[2] && v[2] < v[3]) return true;
-  const weeks = (new Date() - new Date(history[history.length - 1]?.date)) / (7 * 86400000);
-  return weeks >= 4 && history.length >= 12;
+  const weeks = (new Date() - new Date(loaded[loaded.length - 1]?.date)) / (7 * 86400000);
+  return weeks >= 4 && loaded.length >= 12;
 }
 
 // ── RP-style muscle volume & fatigue helpers ──────────────────────────────────
@@ -838,11 +974,12 @@ function getMuscleWeeklySFR(muscle, history, weeklySets) {
 
 // ── Claude API ────────────────────────────────────────────────────────────────
 // ── Dedup helper ─────────────────────────────────────────────────────────────
-// Keep the first occurrence of each date+day pair; later duplicates are dropped.
+// Keep the first occurrence of each date+day+mode triple; later duplicates drop.
+// Mode is part of the key so a Weights Push and a TRX Push on the same day both survive.
 function dedupHistory(arr) {
   const seen = new Set();
   return (arr || []).filter(h => {
-    const key = `${String(h.date).slice(0,10)}|${h.day}`;
+    const key = `${String(h.date).slice(0,10)}|${h.day}|${h.mode || DEFAULT_MODE}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -870,6 +1007,7 @@ async function syncSession(entry, nextSession, bodyWeightHistory) {
       action: "save_session",
       date:               entry.date,
       day:                entry.day,
+      mode:               entry.mode || DEFAULT_MODE,
       volume:             entry.volume,
       rating:             entry.rating  || "",
       notes:              entry.notes   || "",
@@ -961,16 +1099,28 @@ async function restoreFromSheets(setData, setSyncStatus) {
         return s.slice(0, 10);
       };
       const existing = d.history || [];
+      // Locally-known mode per date+day. The Sheets backend has no mode column
+      // yet, so a restored session would come back untagged — and an untagged
+      // session counts as weights. Re-apply the local tag to stop a restore
+      // from silently promoting a TRX/BW session into weight progression.
+      const localModes = {};
+      existing.forEach(h => {
+        if (!isWeightsMode(h.mode)) localModes[`${normDate(h.date)}|${h.day}`] = h.mode;
+      });
       const cloud    = dedupHistory(
         (sessRes.sessions || [])
           .filter(s => s.date && s.day)
-          .map(s => ({ ...s, date: normDate(s.date) }))
+          .map(s => {
+            const date = normDate(s.date);
+            return { ...s, date, mode: s.mode || localModes[`${date}|${s.day}`] || DEFAULT_MODE };
+          })
       );
       const merged   = [...cloud];
       existing.forEach(local => {
         const localDate = normDate(local.date);
-        if (!merged.find(c => c.date === localDate && c.day === local.day)) {
-          merged.push({ ...local, date: localDate });
+        const localMode = local.mode || DEFAULT_MODE;
+        if (!merged.find(c => c.date === localDate && c.day === local.day && (c.mode || DEFAULT_MODE) === localMode)) {
+          merged.push({ ...local, date: localDate, mode: localMode });
         }
       });
       merged.sort((a,b) => new Date(b.date) - new Date(a.date));
@@ -1370,11 +1520,11 @@ function ScheduleScreen({ data, setData, onNext }) {
               <div style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--muted)" }}>{(SPLIT_MAP[day]||[]).join(" - ") || "Recovery day"}</div>
               {warnings.map((w,wi) => <div key={wi} style={{ fontSize: 10, color: "var(--red)", fontFamily: "var(--font-m)", marginTop: 2 }}>{w}</div>)}
             </div>
-            {day !== "REST" && <button style={S.btnSm} onClick={() => { setData(d => ({ ...d, activeDay: day })); onNext(); }}>Start</button>}
+            {day !== "REST" && <button style={S.btnSm} onClick={() => { setData(d => ({ ...d, activeDay: day, activeMode: DEFAULT_MODE })); onNext(); }}>Start</button>}
           </div>
         );
       })}
-      <button style={{ ...S.btn, width: "100%", justifyContent: "center", marginTop: 8, marginBottom: 20 }} onClick={() => { setData(d => ({ ...d, activeDay: split[0] })); onNext(); }}>
+      <button style={{ ...S.btn, width: "100%", justifyContent: "center", marginTop: 8, marginBottom: 20 }} onClick={() => { setData(d => ({ ...d, activeDay: split[0], activeMode: DEFAULT_MODE })); onNext(); }}>
         Start Day 1: {split[0]}
       </button>
     </div>
@@ -1398,8 +1548,6 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const repsOnly    = activeEx.repsOnly    || false;
 
   const rr = REP_RANGES[goal] || REP_RANGES.general;
-  // Override reps for exercises that have their own rep ranges
-  const effectiveReps = repOverride || rr.reps;
   const effectiveSets = 3; // core/timed always 3 sets
   const key = activeEx.name;
 
@@ -1414,8 +1562,12 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const numSets = (isTimed || repOverride) ? effectiveSets : _isDeload ? 2 : rr.sets;
   const suggestion = useMemo(
     () => getSmartSuggestion(key, goal, history, data.profileBaseline, data),
-    [key, goal, history, data.profileBaseline, data.nextSession, data.barWeight, data.barbellPlates, data.ezbarWeight, data.ezbarPlates, data.dumbbellMax]
+    [key, goal, history, data.profileBaseline, data.nextSession, data.activeMode, data.barWeight, data.barbellPlates, data.ezbarWeight, data.ezbarPlates, data.dumbbellMax]
   );
+  // A rep-target plan (bodyweight / TRX / reps-only progression) beats the
+  // static rep range — that is how those modes actually progress.
+  const plannedReps   = suggestion?.source === "planned" && !suggestion?.weight ? suggestion.reps : null;
+  const effectiveReps = plannedReps || repOverride || rr.reps;
   const sets = sessionLog[key] || Array.from({ length: numSets }, () => isTimed ? { seconds: "", rpe: "" } : { weight: suggestion?.weight || "", reps: "", rpe: "" });
   const weightDisplay = suggestion?.weight ? formatWeightDisplay(key, suggestion.weight, data) : null;
 
@@ -1549,7 +1701,14 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   };
 
   const doSwap = (alt) => {
-    setSwappedTo({ name: alt.name, muscle: alt.muscle, eq: ["bodyweight"], unilateral: false, cat: activeEx.cat, isFav: false });
+    // Carry the logging shape across the swap — in TRX/BW mode a replacement
+    // must stay reps+RIR rather than sprouting a weight field.
+    setSwappedTo({
+      name: alt.name, muscle: alt.muscle, eq: ["bodyweight"], unilateral: false,
+      cat: activeEx.cat, isFav: false,
+      ...(repOverride ? { repOverride } : {}),
+      ...(repsOnly    ? { repsOnly }    : {}),
+    });
     setAlts([]); setTip(""); setExpanded(false);
   };
 
@@ -2283,24 +2442,35 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
   const isIntense  = meso.phase === "intensification";
   const phaseLen   = PHASE_LENGTHS[meso.phase] || 12;
 
+  const mode      = data.activeMode || DEFAULT_MODE;
+  const isWeights = isWeightsMode(mode);
+
   const exercises = useMemo(() => {
-    const raw = getExercisesForDay(day, data.equipment||[], data.goal, data.favourites, data.level);
+    const raw = getExercisesForDay(day, data.equipment||[], data.goal, data.favourites, data.level, mode);
     const ov = (data.sessionOverride?.day === day) ? data.sessionOverride : { removed: [], replaced: {} };
+    const pool = isWeights
+      ? Object.values(EXERCISE_DB).flat()
+      : Object.values(MODE_EXERCISE_DB[mode] || {}).flat();
     return raw
       .filter(ex => !ov.removed.includes(ex.name))
       .map(ex => {
         const rep = ov.replaced[ex.name];
         if (!rep) return ex;
-        const dbEx = Object.values(EXERCISE_DB).flat().find(e => e.name === rep);
+        const dbEx = pool.find(e => e.name === rep);
         return dbEx ? { ...dbEx, isFav: false } : ex;
       });
-  }, [day, data.equipment, data.goal, data.favourites, data.level, data.sessionOverride]);
+  }, [day, mode, isWeights, data.equipment, data.goal, data.favourites, data.level, data.sessionOverride]);
+
+  // Cards read history for their own mode: "last session" comparisons and rep
+  // progression stay inside the mode, and loaded bests stay out of TRX/BW.
+  const modeHistory = useMemo(() => historyForMode(data.history, mode), [data.history, mode]);
+
   const [sessionLog, setSessionLog] = useState({});
   const [finished, setFinished] = useState(false);
   const [trendDismissed, setTrendDismissed] = useState(false);
   const trends = useMemo(
-    () => trendDismissed ? [] : detectTrends(day, data.history || []),
-    [trendDismissed, day, data.history]
+    () => (trendDismissed || !isWeights) ? [] : detectTrends(day, data.history || []),
+    [trendDismissed, isWeights, day, data.history]
   );
   const [sessionRating, setSessionRating] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
@@ -2313,12 +2483,14 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
   // Apply an AI proposal directly to next session's plan and sync to Sheets
   const applyAiProposal = (p, idx) => {
     setData(d => {
-      const dayType = getDayType(day);
-      const current = (d.nextSession?.[dayType] || {})[p.exercise] || {};
-      const updatedExercise = p.field === "reps"
+      const bucket  = planKeyFor(getDayType(day), mode);
+      const current = (d.nextSession?.[bucket] || {})[p.exercise] || {};
+      // TRX/BW modes have no weight field, so any proposal there is a rep target.
+      const field   = isWeights ? p.field : "reps";
+      const updatedExercise = field === "reps"
         ? { ...current, targetReps: p.value, type: "reps", source: "ai_proposal" }
         : { ...current, targetWeight: p.value, type: "weight", source: "ai_proposal", targetReps: current.targetReps || 8 };
-      const newNextSession = { ...(d.nextSession || {}), [dayType]: { ...(d.nextSession?.[dayType] || {}), [p.exercise]: updatedExercise } };
+      const newNextSession = { ...(d.nextSession || {}), [bucket]: { ...(d.nextSession?.[bucket] || {}), [p.exercise]: updatedExercise } };
       const lastEntry = (d.history || [])[0];
       if (lastEntry) {
         setSyncStatus("syncing");
@@ -2335,18 +2507,23 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
   const deload = shouldDeload(data.history);
   const warnings = getMuscleWarnings(day, data.history);
   const totalVolume = Object.values(sessionLog).flat().reduce((a,s) => a+(parseFloat(s.weight)||0)*(parseInt(s.reps)||0), 0);
+  // TRX/BW sessions carry no load, so reps are the headline number instead.
+  const totalReps   = Object.values(sessionLog).flat().reduce((a,s) => a+(parseInt(s.reps)||0), 0);
 
   const warmupProtocol = age >= 40
     ? ["5 min light cardio","Hip circles 10 each side","Arm circles 10 each","Leg swings 10 each leg","Band pull-aparts 15 reps","2-3 warm-up sets per exercise"]
     : ["3 min light movement","Joint mobility 5 min","1-2 warm-up sets per exercise"];
 
   const saveSession = () => {
-    const entry = { date: new Date().toISOString().slice(0,10), day, volume: totalVolume, log: sessionLog, rating: sessionRating, notes: sessionNotes };
+    // `mode` is the marker that keeps TRX/BW sessions out of weight progression.
+    const entry = { date: new Date().toISOString().slice(0,10), day, mode, volume: totalVolume, log: sessionLog, rating: sessionRating, notes: sessionNotes };
     const { dayType, plan } = calcNextSessionPlan(day, sessionLog, data.goal, data);
-    const updatedNextSession = { ...(data.nextSession || {}), [dayType]: plan };
-    // Update mesocycle
+    // Non-weights plans go to their own namespace, so they only ever feed back
+    // into the same mode. In TRX/BW every entry comes out as a rep target.
+    const updatedNextSession = { ...(data.nextSession || {}), [planKeyFor(dayType, mode)]: plan };
+    // Update mesocycle — the lifting block only advances on weights sessions.
     const currentMeso  = initMesocycle(data.mesocycle);
-    const newCount     = currentMeso.sessionCount + 1;
+    const newCount     = isWeights ? currentMeso.sessionCount + 1 : currentMeso.sessionCount;
     const phaseLen     = PHASE_LENGTHS[currentMeso.phase] || 12;
     const updatedMeso  = {
       ...currentMeso,
@@ -2373,7 +2550,9 @@ One verdict sentence with a specific volume or intensity number. Then 2-3 senten
 2-3 sentences on multi-session patterns. Reference exercise names, volume numbers, and RIR trajectory from the history provided. Note progressions, stalls, or warning signs.
 
 [PROPOSALS]
-A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 concrete target changes for the next ${day} session. Each item: {"exercise": "<name>", "field": "weight"|"reps", "value": <number>, "reason": "<reason, under 15 words>"}. "exercise" must exactly match one of: ${Object.keys(sessionLog).join(", ")}. Use "field":"weight" for barbell/dumbbell/EZ-bar/dip-belt exercises and "field":"reps" for bodyweight/timed/reps-only exercises. Base values on the rep/RIR data above — call out stalls, overreach, or easy sessions. If no concrete change is warranted, return [].`;
+A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 concrete target changes for the next ${day} session. Each item: {"exercise": "<name>", "field": "weight"|"reps", "value": <number>, "reason": "<reason, under 15 words>"}. "exercise" must exactly match one of: ${Object.keys(sessionLog).join(", ")}. ${isWeights
+  ? `Use "field":"weight" for barbell/dumbbell/EZ-bar/dip-belt exercises and "field":"reps" for bodyweight/timed/reps-only exercises.`
+  : `This was a ${modeLabel(mode)} session with no external load — every proposal must use "field":"reps". Never propose a weight.`} Base values on the rep/RIR data above — call out stalls, overreach, or easy sessions. If no concrete change is warranted, return [].`;
     callClaude([{ role: "user", content: buildSessionSummaryPrompt(entry, data.history || [], data) }], aiSystem)
       .then(text => setAiSummary(text))
       .catch(() => setAiSummary("[SESSION]\nCould not generate analysis — check your connection.\n[TRENDS]\n—\n[PROPOSALS]\n—"))
@@ -2398,17 +2577,26 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
       <div style={S.h1}>Session <span style={{ color:"var(--green)" }}>Done!</span></div>
       <div style={{ ...S.card, textAlign:"center", padding:28, border:"1px solid var(--green)" }}>
         <div style={{ fontSize:44, marginBottom:8 }}>🏆</div>
-        <div style={{ fontFamily:"var(--font-h)", fontSize:26, color:"var(--green)" }}>{totalVolume.toFixed(0)} kg</div>
-        <div style={{ color:"var(--muted)", fontSize:11, fontFamily:"var(--font-m)" }}>TOTAL VOLUME · {exercises.length} exercises</div>
+        {isWeights ? (
+          <>
+            <div style={{ fontFamily:"var(--font-h)", fontSize:26, color:"var(--green)" }}>{totalVolume.toFixed(0)} kg</div>
+            <div style={{ color:"var(--muted)", fontSize:11, fontFamily:"var(--font-m)" }}>TOTAL VOLUME · {exercises.length} exercises</div>
+          </>
+        ) : (
+          <>
+            <div style={{ fontFamily:"var(--font-h)", fontSize:26, color:"var(--green)" }}>{totalReps} reps</div>
+            <div style={{ color:"var(--muted)", fontSize:11, fontFamily:"var(--font-m)" }}>{modeLabel(mode).toUpperCase()} · {exercises.length} exercises</div>
+          </>
+        )}
         {sessionRating && <div style={{ marginTop:10, fontSize:14 }}>{"⭐".repeat(parseInt(sessionRating))}</div>}
         {sessionNotes && <div style={{ marginTop:6, fontFamily:"var(--font-b)", fontSize:13, color:"var(--muted)", fontStyle:"italic" }}>"{sessionNotes}"</div>}
         {planSaved && (
           <div style={{ background:"rgba(34,197,94,0.08)", border:"1px solid rgba(34,197,94,0.3)", borderRadius:6, padding:"8px 12px", marginTop:14, fontFamily:"var(--font-m)", fontSize:12, color:"var(--green)", textAlign:"left" }}>
-            📋 Next {day} session planned — weights adjusted from your RIR
+            📋 Next {day} {isWeights ? "" : modeLabel(mode) + " "}session planned — {isWeights ? "weights" : "rep targets"} adjusted from your RIR
           </div>
         )}
       </div>
-      {meso.pendingTransition && (
+      {isWeights && meso.pendingTransition && (
         <div style={{ ...S.card, border:"1px solid var(--amber)", marginTop:14, animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
           <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18, color:"var(--amber)", marginBottom:6 }}>
             Phase complete — {meso.sessionCount} {phaseLabel(meso.phase).toLowerCase()} sessions done
@@ -2451,21 +2639,32 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
           <button style={{ ...S.btnSm, fontSize:12 }} onClick={onBack}>← Home</button>
           <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
             <div style={S.h1}>{day}</div>
-            <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:phaseColor(meso.phase), letterSpacing:1 }}>
-              {phaseLabel(meso.phase)} · {meso.sessionCount}/{phaseLen}
-            </span>
+            {!isWeights && <span style={S.tag("var(--purple)")}>{modeLabel(mode)}</span>}
+            {isWeights && (
+              <span style={{ fontFamily:"var(--font-m)", fontSize:10, color:phaseColor(meso.phase), letterSpacing:1 }}>
+                {phaseLabel(meso.phase)} · {meso.sessionCount}/{phaseLen}
+              </span>
+            )}
           </div>
         </div>
-        {totalVolume > 0 && (
+        {isWeights && totalVolume > 0 && (
           <div style={{ textAlign:"right" }}>
             <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>VOL</div>
             <div style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:20, color:"var(--amber)" }}>{totalVolume.toFixed(0)}kg</div>
           </div>
         )}
       </div>
-      <div style={S.sub}>{exercises.length} EXERCISES · {(data.level||"").toUpperCase()} · HYPERTROPHY</div>
+      <div style={S.sub}>
+        {exercises.length} EXERCISES · {(data.level||"").toUpperCase()} · {isWeights ? "HYPERTROPHY" : `${modeLabel(mode).toUpperCase()} · REPS + RIR`}
+      </div>
 
-      {isDeload && <div style={{ ...S.warn, marginBottom:8 }}>DELOAD WEEK — Same weights, 2 sets only, RIR 3-4. Recovery first.</div>}
+      {!isWeights && (
+        <div style={{ ...S.info, marginBottom:8 }}>
+          {modeLabel(mode)} session — log reps and RIR. Not counted toward weights progression or the mesocycle.
+        </div>
+      )}
+
+      {isWeights && isDeload && <div style={{ ...S.warn, marginBottom:8 }}>DELOAD WEEK — Same weights, 2 sets only, RIR 3-4. Recovery first.</div>}
       {warnings.map((w,i) => <div key={i} style={{ ...S.warn, marginBottom:6 }}>{w}</div>)}
 
       {trends.length > 0 && (
@@ -2502,7 +2701,7 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
       {exercises.length === 0 ? (
         <div style={{ ...S.card, textAlign:"center", padding:28, color:"var(--muted)" }}>No exercises match your equipment.</div>
       ) : exercises.map((ex,i) => (
-        <ExerciseCard key={`${ex.name}-${i}`} ex={ex} exNum={i+1} totalEx={exercises.length} goal={data.goal} data={data} sessionLog={sessionLog} setSessionLog={setSessionLog} history={data.history} />
+        <ExerciseCard key={`${mode}-${ex.name}-${i}`} ex={ex} exNum={i+1} totalEx={exercises.length} goal={data.goal} data={data} sessionLog={sessionLog} setSessionLog={setSessionLog} history={modeHistory} />
       ))}
 
       <div style={{ ...S.card, marginTop:16 }}>
@@ -2664,15 +2863,29 @@ function HistoryScreen({ data }) {
             {/* Session header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div>
-                <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 16 }}>{h.day}</div>
+                <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 16, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  {h.day}
+                  {!isWeightsMode(h.mode) && <span style={S.tag("var(--purple)")}>{modeLabel(h.mode)}</span>}
+                </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 2 }}>
                   <span style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--muted)" }}>{h.date}</span>
                   {h.rating && <span style={{ fontSize: 11 }}>{"⭐".repeat(parseInt(h.rating))}</span>}
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontFamily: "var(--font-h)", fontWeight: 900, fontSize: 20, color: "var(--amber)" }}>{(h.volume||0).toFixed(0)}</div>
-                <div style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--muted)" }}>kg volume</div>
+                {isWeightsMode(h.mode) ? (
+                  <>
+                    <div style={{ fontFamily: "var(--font-h)", fontWeight: 900, fontSize: 20, color: "var(--amber)" }}>{(h.volume||0).toFixed(0)}</div>
+                    <div style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--muted)" }}>kg volume</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontFamily: "var(--font-h)", fontWeight: 900, fontSize: 20, color: "var(--purple)" }}>
+                      {Object.values(h.log||{}).flat().reduce((a,s) => a+(parseInt(s.reps)||0), 0)}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--muted)" }}>total reps</div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -2835,6 +3048,9 @@ function getDayType(day) {
 function calcNextSessionPlan(day, sessionLog, goal, data) {
   const dayType = getDayType(day);
   const plan = {};
+  // TRX and bodyweight sessions have no weight field at all — their progression
+  // is always a rep target, never a load change.
+  const repsOnlyMode = !isWeightsMode(data?.activeMode);
 
   const isDumbbellEx = (name) => ["Dumbbell Bench Press","Dumbbell Shoulder Press","Dumbbell Row",
     "Dumbbell Curl","Single-Arm Dumbbell Row","Dumbbell Fly","Goblet Squat","Single-Leg RDL",
@@ -2886,7 +3102,7 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
 
     const avgRIR = rirValues.reduce((a, b) => a + b, 0) / rirValues.length;
 
-    if (hasTimed || (!hasWeight && hasReps) || isBodyweightEx(exName)) {
+    if (repsOnlyMode || hasTimed || (!hasWeight && hasReps) || isBodyweightEx(exName)) {
       const lastReps = sets.filter(s => s.reps).map(s => parseInt(s.reps));
       if (!lastReps.length) return;
       const avgReps = Math.round(lastReps.reduce((a, b) => a + b, 0) / lastReps.length);
@@ -2982,11 +3198,19 @@ function getSmartSuggestion(exName, goal, history, profileBaseline, data) {
 
   
   // ── PRIORITY 0: Next session plan from RIR ─────────────────────────────────
+  // Only read plan buckets belonging to the active mode. Bodyweight and TRX
+  // plans live under a "<mode>:<dayType>" key, so a TRX session can never
+  // re-target the same-named exercise in weights mode.
+  const activeMode = data?.activeMode || DEFAULT_MODE;
   if (data && data.nextSession) {
-    for (const dayPlan of Object.values(data.nextSession)) {
+    for (const [bucketKey, dayPlan] of Object.entries(data.nextSession)) {
+      const bucketMode = bucketKey.includes(":") ? bucketKey.split(":")[0] : DEFAULT_MODE;
+      if (bucketMode !== activeMode) continue;
       if (dayPlan && dayPlan[exName]) {
         const p = dayPlan[exName];
-        if (p.type === "weight" && p.targetWeight)
+        // A load target is only ever honoured in weights mode, even if a stale
+        // one somehow sits in a TRX/BW bucket.
+        if (p.type === "weight" && p.targetWeight && isWeightsMode(activeMode))
           return { weight: p.targetWeight.toFixed(1), reps: rr.reps, source:"planned",
             oneRM: calc1RM(p.targetWeight, p.targetReps), planRIR: p.targetRIR };
         if (p.type === "reps")
@@ -2994,6 +3218,10 @@ function getSmartSuggestion(exName, goal, history, profileBaseline, data) {
       }
     }
   }
+
+  // Non-weights modes stop here: no loaded record, baseline, or cross-exercise
+  // estimate applies. Progression for these comes purely from the rep plan above.
+  if (!isWeightsMode(activeMode)) return { weight: null, reps: rr.reps, source: "bw", oneRM: null };
 
   // Intensification phase — formula-based weight calc
   if (data?.mesocycle?.phase === "intensification") {
@@ -3839,6 +4067,8 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
   const [bwInput, setBwInput] = useState(data.bodyWeight || "");
   const [bwSaved, setBwSaved] = useState(false);
   const [selectedDay, setSelectedDay] = useState(null);
+  const [mode, setMode] = useState(data.activeMode || DEFAULT_MODE);
+  const isWeights = isWeightsMode(mode);
 
   // Smart next day suggestion (skip stretch sessions for split logic)
   const lastTrainingSession = history.find(h => h.day !== "Stretch");
@@ -3891,7 +4121,7 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
   };
 
   const startSession = () => {
-    setData(d => ({ ...d, activeDay }));
+    setData(d => ({ ...d, activeDay, activeMode: mode }));
     onStartSession();
   };
 
@@ -3909,7 +4139,7 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
   const [showAltsFor, setShowAltsFor] = useState(null); // exercise name
 
   // Preview list with overrides applied (for the adjust panel)
-  const todayExercises = getExercisesForDay(activeDay, data.equipment||[], data.goal, data.favourites, data.level);
+  const todayExercises = getExercisesForDay(activeDay, data.equipment||[], data.goal, data.favourites, data.level, mode);
 
   const toggleRemove = (name) => {
     if (override.removed.includes(name)) {
@@ -3951,7 +4181,7 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
   // Last session summary
   const lastLog = lastSession ? Object.entries(lastSession.log||{}).slice(0,3) : [];
   const _activeDayType = getDayType(activeDay);
-  const _nextPlan = data.nextSession && data.nextSession[_activeDayType];
+  const _nextPlan = data.nextSession && data.nextSession[planKeyFor(_activeDayType, mode)];
   const _plannedCount = _nextPlan ? Object.keys(_nextPlan).length : 0;
 
   const today2 = new Date().toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long" });
@@ -4074,6 +4304,23 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
       {/* Today's session card */}
       <div style={S.h2}>Today's Session</div>
       <div style={{ ...S.cardRaised, border:"1px solid var(--amber)", marginBottom:14 }}>
+        {/* Mode selector — TRX/BW swap the exercise list and log reps+RIR only */}
+        <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--amber)", letterSpacing:1, marginBottom:8 }}>SELECT MODE</div>
+        <div style={{ display:"flex", gap:5, marginBottom:4 }} role="group" aria-label="Workout mode">
+          {WORKOUT_MODES.map(m => (
+            <button key={m.id} type="button" aria-pressed={mode === m.id}
+              style={{ ...S.chip(mode === m.id), flex:1, justifyContent:"center", padding:"10px 8px", fontSize:12, minHeight:44 }}
+              onClick={() => setMode(m.id)}>
+              <span aria-hidden="true">{m.icon}</span>{m.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", marginBottom:14 }}>
+          {isWeights
+            ? "Load progression from your RIR"
+            : `${modeLabel(mode)} — reps + RIR only, kept out of weights progression`}
+        </div>
+
         {/* Day selector */}
         <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--amber)", letterSpacing:1, marginBottom:8 }}>SELECT DAY</div>
         <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:14 }}>
@@ -4100,14 +4347,16 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
 
         {/* Last time this day was done */}
         {(() => {
-          const lastSame = history.find(h => h.day === activeDay);
+          const lastSame = historyForMode(history, mode).find(h => h.day === activeDay);
+          const label = isWeights ? activeDay : `${modeLabel(mode)} ${activeDay}`;
           return lastSame ? (
             <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)", marginBottom:14 }}>
-              Last {activeDay}: {lastSame.date} · {(lastSame.volume||0).toFixed(0)}kg volume
+              Last {label}: {lastSame.date}
+              {isWeights ? ` · ${(lastSame.volume||0).toFixed(0)}kg volume` : ` · ${Object.keys(lastSame.log||{}).length} exercises`}
             </div>
           ) : (
             <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)", marginBottom:14 }}>
-              First time doing {activeDay} — baseline session!
+              First time doing {label} — baseline session!
             </div>
           );
         })()}
@@ -4128,7 +4377,7 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
         })()}
         {_plannedCount > 0 && (
       <div style={{ background:"rgba(34,197,94,0.08)", border:"1px solid rgba(34,197,94,0.3)", borderRadius:6, padding:"8px 12px", marginBottom:14, fontFamily:"var(--font-m)", fontSize:12, color:"var(--green)" }}>
-        📋 {_plannedCount} exercises planned — weights adjusted from your last {activeDay} RIR
+        📋 {_plannedCount} exercises planned — {isWeights ? "weights" : "rep targets"} adjusted from your last {isWeights ? "" : modeLabel(mode) + " "}{activeDay} RIR
       </div>
     )}
 
