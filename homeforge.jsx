@@ -535,80 +535,145 @@ const DAY_TEMPLATES = {
 //   Hip flexor+APT: ScienceDirect doi 10.1016/j.jmpt.2020.06.006
 //   Piriformis: spine-health.com, NIH StatPearls
 //   Hold times: Feland 2001 — 60s holds superior for adults ≥60y; ACSM recommends 60s for older adults
+// Central exercise definitions — deduped. Routines below reference these by name.
+//   metricType drives how the card header reads:
+//     "hold"     — static hold.        Fields: holdSeconds, perSide
+//     "reps"     — repetitions.        Fields: sets, reps, perSide
+//     "repsHold" — reps with a hold.   Fields: reps, holdSeconds, perSide
+//   sets (optional) also renders as a "× N sets" suffix on hold/repsHold.
+//   sec = estimated duration, used only for time-budget math in getStretchItems.
+//   Description split into setup / movement / feel / mistake (feel is highlighted in the card).
+const EXERCISES = {
+  "Thoracic Foam Roller": {
+    metricType:"hold", holdSeconds:90, perSide:false, sec:90,
+    setup:    "Roller across your upper back at the shoulder-blade line, knees bent, hips down, hands cradling your head.",
+    movement: "Work through the mid-back (T4–T8) in short segments, letting your upper back drape backward over the roller.",
+    feel:     "A gentle extension and release in the muscles either side of the upper spine — never a pinch on the spine itself.",
+    mistake:  "Rolling too low onto the lower back — stop at the bottom of the ribs; the lumbar spine should never bend over the roller.",
+  },
+  "Doorway Chest Stretch": {
+    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    setup:    "Stand in a doorway, forearm on the frame, elbow bent to 90° at about shoulder height, one foot staggered forward.",
+    movement: "Shift your weight gently through the front foot until the chest opens. Hold, then switch sides.",
+    feel:     "A broad stretch across the front of the chest and shoulder — not in the neck or deep in the shoulder joint.",
+    mistake:  "Placing the elbow too high or shrugging — this pinches the shoulder and sends tension to the neck instead of the pec.",
+  },
+  "Wall Angel": {
+    metricType:"reps", sets:2, reps:8, perSide:false, sec:80,
+    setup:    "Back against a wall, lower back flat, ribs down, arms bent in a 'goalpost' with the backs of the hands on the wall.",
+    movement: "Slowly slide the arms up overhead and back down, keeping hands and wrists in contact with the wall the whole way.",
+    feel:     "Work between the shoulder blades and in the lower traps — a controlled effort, not a stretch.",
+    mistake:  "Letting the lower back arch off the wall or the hands peel away to reach higher — only go as far as contact holds.",
+  },
+  "Chin Tuck": {
+    metricType:"repsHold", reps:10, holdSeconds:5, perSide:false, sec:60,
+    setup:    "Sit or stand tall, shoulders relaxed, eyes level and facing straight ahead.",
+    movement: "Draw the chin straight back (making a 'double chin'), hold briefly, then release. Repeat for the prescribed reps.",
+    feel:     "A lengthening at the base of the skull and top of the neck, with a light effort at the front of the throat.",
+    mistake:  "Tipping the chin down toward the chest instead of gliding it straight back — that flexes the neck rather than retracting it.",
+  },
+  "Thread the Needle": {
+    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    setup:    "On all fours, wrists under shoulders, knees under hips, back flat.",
+    movement: "Reach one arm underneath the body and across, lowering that shoulder toward the floor, then return. Rotate through the upper back only.",
+    feel:     "A rotational stretch across the upper back and the rear of the shoulder of the threading arm.",
+    mistake:  "Letting the hips twist to force more range — keep them square and level so the motion stays in the thoracic spine.",
+  },
+  "Lat Doorway Stretch": {
+    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    setup:    "Grip a doorframe or upright at about head height, feet back so the arm is straight and taking some weight.",
+    movement: "Sit the hips back and away from the anchor, adding a slight side-bend, until the side of the back lengthens.",
+    feel:     "A long stretch down the side of the back and under the armpit — the lat, from armpit toward hip.",
+    mistake:  "Shrugging the shoulder up to the ear instead of reaching long — let the shoulder blade glide and keep the arm relaxed.",
+  },
+  "Hip Flexor Lunge": {
+    metricType:"hold", holdSeconds:90, perSide:true, sec:90,
+    setup:    "Half-kneeling: back knee on the floor, front foot flat ahead, torso tall and stacked over the hips.",
+    movement: "First tuck the pelvis under (squeeze the back-leg glute, flatten the low back), THEN shift gently forward. Hold, switch sides.",
+    feel:     "A stretch across the front of the hip and top of the thigh of the back (kneeling) leg.",
+    mistake:  "Leaning forward before tucking the pelvis — this arches the lower back and loads the disc instead of stretching the hip flexor.",
+  },
+  "Figure-4 Piriformis": {
+    metricType:"hold", holdSeconds:60, perSide:true, sets:3, sec:60,
+    setup:    "Lie on your back, both knees bent, and cross one ankle over the opposite thigh to make a 'figure 4'.",
+    movement: "Reach through and gently draw the supporting thigh toward the chest until you feel the stretch. Hold, then switch sides.",
+    feel:     "A deep stretch in the glute and outer hip of the crossed leg.",
+    mistake:  "Yanking or bouncing the leg — pull slowly and keep the lower back flat on the floor rather than curling off it.",
+  },
+  "Cat-Cow Flow": {
+    metricType:"hold", holdSeconds:90, perSide:false, sec:90,
+    setup:    "On all fours, wrists under shoulders, knees under hips, spine in neutral.",
+    movement: "Exhale and round the spine up toward the ceiling, then inhale and let it sink into a gentle arch. Move slowly and continuously.",
+    feel:     "A gentle wave of mobility travelling along the whole spine, easing the mid and lower back.",
+    mistake:  "Forcing the end range or moving fast — stay slow and stop the instant the lower back feels any pinch.",
+  },
+  "Prone Extension (McKenzie)": {
+    metricType:"repsHold", reps:10, holdSeconds:2, sets:3, perSide:false, sec:30,
+    setup:    "Lie face down, hands flat under the shoulders as if to push up, hips and legs relaxed.",
+    movement: "Slowly press the upper body up, letting hips and belly stay heavy on the floor. Hold briefly at the top, then lower with control.",
+    feel:     "A gentle extension through the lower back as it arches — mild, never sharp.",
+    mistake:  "Tensing the glutes and hips while pressing up — keep the lower body soft. STOP if it sends tingling or pain below the knee.",
+  },
+  "Knee to Chest": {
+    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    setup:    "Lie on your back, one leg straight along the floor, the other knee bent.",
+    movement: "Gently draw the bent knee toward the chest with your hands until you feel a mild pull, hold, then switch sides.",
+    feel:     "A gentle stretch and release across the lower back and into the glute of the bent leg.",
+    mistake:  "Letting the straight leg bend up off the floor — keep it long so the lower back gets the gentle traction.",
+  },
+  "Supine Hamstring Stretch": {
+    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    setup:    "Lie on your back, loop a towel or strap around the arch of one foot, other leg bent or straight on the floor.",
+    movement: "Straighten the looped leg up toward the ceiling using the towel until the back of the thigh lengthens. Hold, switch sides.",
+    feel:     "A stretch down the back of the thigh — from behind the knee up toward the sit bone.",
+    mistake:  "Rounding the lower back off the floor to reach further — keep it flat; never substitute a seated toe-touch, which loads the disc.",
+  },
+  "Glute Bridge Hold": {
+    metricType:"hold", holdSeconds:60, perSide:false, sec:60,
+    setup:    "Lie on your back, knees bent, feet flat and hip-width, arms resting at your sides.",
+    movement: "Press through the heels and lift the hips into a straight line from knees to shoulders. Squeeze the glutes and hold.",
+    feel:     "A strong contraction in the glutes and hamstrings — this is activation work, not a stretch.",
+    mistake:  "Arching the lower back to lift higher instead of driving with the glutes — ribs down, stop at a straight hip line.",
+  },
+  "Standing Quad Stretch": {
+    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    setup:    "Stand tall near a wall for balance, weight on one leg.",
+    movement: "Bend the other knee and hold the ankle, drawing the heel toward the glute while keeping the knees together. Hold, switch sides.",
+    feel:     "A stretch along the front of the thigh — the quad of the bent leg.",
+    mistake:  "Letting the knee drift forward or the low back arch to pull harder — keep the knees aligned and the pelvis tucked slightly.",
+  },
+};
+
 const STRETCH_ROUTINES = {
   upper_back: {
     label: "Upper Back",
     desc:  "Thoracic extension · pec opener · chin tuck · postural reset",
     color: "var(--amber)",
     afterDay: ["Push","Full Body","Full Body A","Upper A","Upper B","Chest","Shoulders","Arms"],
-    items: [
-      // Foam roller first — mobilises joints, creates ROM window for what follows
-      { name:"Thoracic Foam Roller",      sec:90, sides:false, cue:"Move roller through T4–T8 in 3 segments (~30s each). Hands behind head, let gravity extend you — stop at lower ribs, never roll lumbar" },
-      // Pec stretch — directly counters the kyphotic pull on the anterior shoulder
-      { name:"Doorway Chest Stretch",     sec:60, sides:true,  cue:"Elbow 90°, stagger feet, lean through — feel stretch across chest, not neck. 60s each side" },
-      // Wall angel — ACTIVE lower-trap & serratus exercise, not a passive stretch; reinforces ROM gained from foam roller
-      { name:"Wall Angel",                sec:80, sides:false, cue:"Active exercise: lower back flat on wall, ribcage down, arms slide up — only go as high as wall contact holds. 2×8 slow reps" },
-      // Chin tuck — corrects forward head posture (FHP) which always accompanies thoracic kyphosis
-      { name:"Chin Tuck",                 sec:60, sides:false, cue:"Stand or sit tall, gently retract chin straight back (not down) — feel a stretch at base of skull. 10 reps × 5s hold. Critical: FHP amplifies thoracic curve" },
-      // Thread the needle — only thoracic rotation exercise here, important for 3D mobility
-      { name:"Thread the Needle",         sec:60, sides:true,  cue:"All-fours, thread arm under body — thoracic rotation only, hips stay square and level" },
-      // Lat stretch last — tight lats internally rotate shoulders and contribute to kyphotic posture
-      { name:"Lat Doorway Stretch",       sec:60, sides:true,  cue:"Grab doorframe at head height, lean back and away, slight side bend — tight lats pull shoulders into forward posture" },
-    ],
+    // Foam roller first (mobilises) → pec opener → active wall angel → chin tuck → rotation → lats last
+    items: ["Thoracic Foam Roller","Doorway Chest Stretch","Wall Angel","Chin Tuck","Thread the Needle","Lat Doorway Stretch"],
   },
   lower_back: {
     label: "Lower Back",
     desc:  "Disc decompression · hip flexor · piriformis · McKenzie",
     color: "var(--blue)",
     afterDay: ["Legs","Pull","Full Body B","Lower A","Lower B","Back"],
-    items: [
-      // Hip flexor first — most critical for disc: APT creates chronic shearing on L4/L5 discs
-      // KEY: posterior pelvic tilt (PPT) during lunge is mandatory — without PPT you bypass psoas and load the disc
-      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Back knee down. BEFORE leaning: tuck pelvis (squeeze glute of back leg + flatten lower back). Then tall torso. Without this tilt you miss the psoas and load the disc instead. 90s each side" },
-      // Piriformis: 60s hold × 3 per side per Spine-Health protocol; compresses sciatic nerve with disc issues
-      { name:"Figure-4 Piriformis",       sec:60, sides:true,  cue:"Lying on back, cross ankle over opposite knee, gently pull thigh toward chest — 3 × 60s each side. Keep lower back flat, never bounce or force" },
-      // Cat-cow: only exercise combining flexion+extension; stops before pain threshold
-      { name:"Cat-Cow Flow",              sec:90, sides:false, cue:"On all fours, exhale fully as you round up, inhale as you sink down. Slow — 4 seconds each direction. Stop the instant you feel lumbar discomfort" },
-      // McKenzie prone extension: evidence-based for posterior disc herniation (most common type)
-      // Repeated end-range extension moves nucleus anteriorly, reduces radiating pain
-      { name:"Prone Extension (McKenzie)",sec:30, sets:3, sides:false, cue:"Face down, hands under shoulders. Slowly press up letting belly sink — hold 2s at top, lower. 10 press-ups per set. STOP if causes leg tingling or radiating pain below knee" },
-      // Knee to chest last as flexion decompressor
-      { name:"Knee to Chest",             sec:60, sides:true,  cue:"Lying on back, pull one knee gently toward chest — other leg stays straight on floor. Gentle traction on lumbar facets. 60s each side" },
-    ],
+    // Hip flexor first (APT is most critical for disc) → piriformis → cat-cow → McKenzie → knee-to-chest decompress
+    items: ["Hip Flexor Lunge","Figure-4 Piriformis","Cat-Cow Flow","Prone Extension (McKenzie)","Knee to Chest"],
   },
   hips_legs: {
     label: "Hips & Legs",
     desc:  "Hip flexors · hamstrings (spine-safe) · glute activation",
     color: "var(--green)",
     afterDay: ["Legs","Full Body B","Lower A","Lower B"],
-    items: [
-      // Same PPT cue as lower_back — consistency matters
-      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Back knee down. Tuck pelvis first (glute squeeze + flatten low back), then lean forward — without posterior tilt you load the lumbar spine instead of stretching psoas. 90s each side" },
-      { name:"Figure-4 Piriformis",       sec:60, sides:true,  cue:"Lying on back, ankle over opposite knee, pull thigh gently — lower back flat on floor, 3 × 60s each side" },
-      // Supine hamstring: spine-safe version — seated toe-touch rounds the lumbar spine (contraindicated with disc)
-      { name:"Supine Hamstring Stretch",  sec:60, sides:true,  cue:"Loop towel around foot, leg toward ceiling — lower back stays FLAT on floor the whole time. Do NOT do seated toe-touch (rounds lumbar disc). 60s each side" },
-      { name:"Glute Bridge Hold",         sec:60, sides:false, cue:"Feet flat, press hips to ceiling and hold. Not a stretch — activates glutes to restore balance after hip flexor dominance. Hold 60s continuous" },
-      { name:"Standing Quad Stretch",     sec:60, sides:true,  cue:"Near wall for balance, pull ankle to glute — keep knees together, no pelvic tilt. 60s each side per ACSM older-adult guidelines" },
-    ],
+    items: ["Hip Flexor Lunge","Figure-4 Piriformis","Supine Hamstring Stretch","Glute Bridge Hold","Standing Quad Stretch"],
   },
   full_body: {
     label: "Full Body",
     desc:  "Complete postural + disc reset — upper & lower back",
     color: "var(--purple)",
     afterDay: [],
-    items: [
-      { name:"Thoracic Foam Roller",      sec:90, sides:false, cue:"Move through T4–T8 in 3 segments (~30s each). Hands behind head — stop at lower ribs, never roll lumbar" },
-      { name:"Doorway Chest Stretch",     sec:60, sides:true,  cue:"Elbow 90°, stagger feet, lean through — feel stretch across chest not neck. 60s each side" },
-      { name:"Chin Tuck",                 sec:60, sides:false, cue:"Sit or stand tall, retract chin straight back (not down) — 10 reps × 5s hold. Corrects forward head posture that drives kyphosis" },
-      { name:"Wall Angel",                sec:80, sides:false, cue:"Active: lower back on wall, ribcage down — slide arms up only as far as wall contact holds. 2×8 slow reps. Strengthens lower traps" },
-      { name:"Thread the Needle",         sec:60, sides:true,  cue:"All-fours, thread arm under — thoracic rotation only, hips stay square" },
-      { name:"Hip Flexor Lunge",          sec:90, sides:true,  cue:"Tuck pelvis FIRST (glute squeeze + flatten low back) before leaning — critical for disc safety. 90s each side" },
-      { name:"Figure-4 Piriformis",       sec:60, sides:true,  cue:"Lying, ankle over opposite knee, pull thigh gently — lower back flat, 3 × 60s each side" },
-      { name:"Cat-Cow Flow",              sec:90, sides:false, cue:"Exhale fully rounding, inhale sinking — 4 seconds each direction. Stop before any lumbar discomfort" },
-      { name:"Prone Extension (McKenzie)",sec:30, sets:3, sides:false, cue:"10 slow press-ups per set, hold 2s at top. Stop if causes leg tingling or radiating pain" },
-      { name:"Supine Hamstring Stretch",  sec:60, sides:true,  cue:"Loop towel under foot, leg toward ceiling — lower back FLAT on floor. Never seated toe-touch with disc issues. 60s each side" },
-      { name:"Lat Doorway Stretch",       sec:60, sides:true,  cue:"Grab frame at head height, lean back and away — tight lats drive forward-shoulder kyphotic posture. 60s each side" },
-    ],
+    items: ["Thoracic Foam Roller","Doorway Chest Stretch","Chin Tuck","Wall Angel","Thread the Needle","Hip Flexor Lunge","Figure-4 Piriformis","Cat-Cow Flow","Prone Extension (McKenzie)","Supine Hamstring Stretch","Lat Doorway Stretch"],
   },
 };
 
@@ -624,11 +689,12 @@ function suggestStretchFocus(history) {
 function getStretchItems(focus, totalMinutes) {
   const routine = STRETCH_ROUTINES[focus];
   if (!routine) return [];
+  const resolved = routine.items.map(name => ({ name, ...EXERCISES[name] }));
   const budget = totalMinutes * 60;
-  const baseTotal = routine.items.reduce((a, it) =>
-    a + it.sec * (it.sides ? 2 : 1) * (it.sets || 1), 0);
+  const baseTotal = resolved.reduce((a, it) =>
+    a + it.sec * (it.perSide ? 2 : 1) * (it.sets || 1), 0);
   const scale = Math.min(1.5, Math.max(0.7, budget / baseTotal));
-  return routine.items.map(it => ({ ...it, effectiveSec: Math.max(30, Math.round(it.sec * scale / 30) * 30) }));
+  return resolved.map(it => ({ ...it, effectiveSec: Math.max(30, Math.round(it.sec * scale / 30) * 30) }));
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -2269,17 +2335,26 @@ function getStretchAlternatives(itemName, focus) {
   const result = [];
   const primary = STRETCH_ROUTINES[focus];
   if (primary) {
-    for (const it of primary.items) {
-      if (!seen.has(it.name)) { seen.add(it.name); result.push({ ...it, fromRoutine: primary.label }); }
+    for (const name of primary.items) {
+      if (!seen.has(name)) { seen.add(name); result.push({ name, ...EXERCISES[name], fromRoutine: primary.label }); }
     }
   }
   for (const [key, r] of Object.entries(STRETCH_ROUTINES)) {
     if (key === focus) continue;
-    for (const it of r.items) {
-      if (!seen.has(it.name)) { seen.add(it.name); result.push({ ...it, fromRoutine: r.label }); }
+    for (const name of r.items) {
+      if (!seen.has(name)) { seen.add(name); result.push({ name, ...EXERCISES[name], fromRoutine: r.label }); }
     }
   }
   return result.slice(0, 6);
+}
+
+// Header label + primary value derived from an exercise's metricType.
+function metricHeader(ex) {
+  if (ex.metricType === "reps")
+    return { label:"SETS × REPS", value:`${ex.sets} × ${ex.reps}` };
+  if (ex.metricType === "repsHold")
+    return { label:"REPS × HOLD", value:`${ex.reps} × ${ex.holdSeconds}s` };
+  return { label:"HOLD TIME", value:`${ex.holdSeconds}s` }; // "hold"
 }
 
 function StretchCard({ item, exNum, totalEx, focus }) {
@@ -2287,15 +2362,12 @@ function StretchCard({ item, exNum, totalEx, focus }) {
   const [swappedTo, setSwappedTo] = useState(null);
   const active = swappedTo || item;
 
-  const fmtTime = sec => {
-    const m = Math.floor(sec / 60), s = sec % 60;
-    return m > 0 ? `${m}:${String(s).padStart(2,"0")}` : `${sec}s`;
-  };
+  const metric = metricHeader(active);
 
   const alts = getStretchAlternatives(active.name, focus);
 
   const doSwap = alt => {
-    setSwappedTo({ ...alt, effectiveSec: active.effectiveSec });
+    setSwappedTo({ ...alt });
     setShowAlts(false);
   };
 
@@ -2312,24 +2384,40 @@ function StretchCard({ item, exNum, totalEx, focus }) {
             {swappedTo && <span style={S.tag("var(--blue)")}>swapped</span>}
           </div>
           <div style={{ display:"flex", gap:4, marginTop:4, flexWrap:"wrap" }}>
-            {active.sides && <span style={S.tag("var(--purple)")}>each side</span>}
-            {(active.sets || 1) > 1 && <span style={S.tag("var(--blue)")}>×{active.sets} sets</span>}
+            {active.perSide && <span style={S.tag("var(--purple)")}>each side</span>}
+            {active.metricType !== "reps" && (active.sets || 1) > 1 && <span style={S.tag("var(--blue)")}>×{active.sets} sets</span>}
           </div>
         </div>
       </div>
 
       <div style={{ background:"rgba(34,197,94,0.08)", border:"1px solid rgba(34,197,94,0.2)", borderRadius:8, padding:"10px 12px", marginBottom:10 }}>
-        <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--green)", letterSpacing:1, marginBottom:4 }}>HOLD TIME</div>
+        <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--green)", letterSpacing:1, marginBottom:4 }}>{metric.label}</div>
         <div style={{ display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap" }}>
-          <span style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:26, color:"var(--green)", lineHeight:1 }}>{fmtTime(active.effectiveSec)}</span>
-          {active.sides && <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:16, color:"var(--text)" }}>each side</span>}
-          {(active.sets || 1) > 1 && <span style={{ fontFamily:"var(--font-h)", fontWeight:600, fontSize:14, color:"var(--muted)" }}>× {active.sets} sets</span>}
+          <span style={{ fontFamily:"var(--font-h)", fontWeight:900, fontSize:26, color:"var(--green)", lineHeight:1 }}>{metric.value}</span>
+          {active.perSide && <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:16, color:"var(--text)" }}>each side</span>}
+          {active.metricType !== "reps" && (active.sets || 1) > 1 && <span style={{ fontFamily:"var(--font-h)", fontWeight:600, fontSize:14, color:"var(--muted)" }}>× {active.sets} sets</span>}
         </div>
       </div>
 
-      <div style={{ fontFamily:"var(--font-b)", fontSize:12, color:"var(--muted)", lineHeight:1.5, marginBottom:10 }}>
-        {active.cue}
+      <div style={{ display:"grid", gap:6, marginBottom:10 }}>
+        {[
+          { label:"Setup",    text:active.setup },
+          { label:"Movement", text:active.movement },
+          { label:"Feel",     text:active.feel, accent:true },
+          { label:"Mistake",  text:active.mistake },
+        ].map(row => (
+          <div key={row.label} style={{ lineHeight:1.5 }}>
+            <span style={{ fontFamily:"var(--font-m)", fontSize:9, letterSpacing:1, textTransform:"uppercase", color: row.accent ? "var(--green)" : "var(--muted)", marginRight:6 }}>{row.label}</span>
+            <span style={{ fontFamily:"var(--font-b)", fontSize:12, color: row.accent ? "var(--green)" : "var(--muted)", fontWeight: row.accent ? 600 : 400 }}>{row.text}</span>
+          </div>
+        ))}
       </div>
+
+      <button
+        style={{ ...S.btnSm, width:"100%", justifyContent:"center", marginBottom:8 }}
+        onClick={() => window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(active.name + " exercise form")}`, "_blank", "noopener")}>
+        ▶ Show video
+      </button>
 
       <div>
         <button
@@ -2347,7 +2435,7 @@ function StretchCard({ item, exNum, totalEx, focus }) {
                 <div style={{ flex:1 }}>
                   <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14 }}>{a.name}</div>
                   <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)" }}>
-                    {a.fromRoutine}{a.sides ? " · each side" : ""}{(a.sets||1)>1 ? ` · ×${a.sets} sets` : ""}
+                    {a.fromRoutine}{a.perSide ? " · each side" : ""}{a.metricType !== "reps" && (a.sets||1)>1 ? ` · ×${a.sets} sets` : ""}
                   </div>
                 </div>
                 <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:13, color:"var(--green)", flexShrink:0 }}>Use →</span>
