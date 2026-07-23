@@ -1721,7 +1721,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const totalVol = sets.reduce((a,s) => a+(parseFloat(s.weight)||0)*(parseInt(s.reps)||0), 0);
   const prevVol = prevSets.reduce((a,s) => a+(parseFloat(s.weight)||0)*(parseInt(s.reps)||0), 0);
   const volDiff = prevVol > 0 && totalVol > 0 ? ((totalVol-prevVol)/prevVol*100).toFixed(0) : null;
-  const tips = TECHNIQUE[key] || [];
+  const tips = TECHNIQUE[key] || null;
 
   const getTip = async () => {
     setLoadingTip(true); setTip("");
@@ -1891,17 +1891,22 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
           <span>📖 Technique cues</span>
           <span aria-hidden="true">{showDesc ? "▲" : "▼"}</span>
         </button>
-        {showDesc && tips.length > 0 && (
-          <div style={{ background:"var(--bg3)", borderRadius:6, padding:"10px 12px", animation:"fadeUp .15s ease both" }}>
-            {tips.map((t,i) => (
-              <div key={i} style={{ display:"flex", gap:8, marginBottom: i<tips.length-1?6:0 }}>
-                <span style={{ color:"var(--amber)", fontFamily:"var(--font-m)", fontSize:11, flexShrink:0 }}>{i+1}.</span>
-                <span style={{ fontFamily:"var(--font-b)", fontSize:13, lineHeight:1.5, color:"var(--text)" }}>{t}</span>
+        {showDesc && tips && (
+          <div style={{ background:"var(--bg3)", borderRadius:6, padding:"10px 12px", animation:"fadeUp .15s ease both", display:"grid", gap:6 }}>
+            {[
+              { label:"Setup",    text:tips.setup },
+              { label:"Movement", text:tips.movement },
+              { label:"Feel",     text:tips.feel, accent:true },
+              { label:"Mistake",  text:tips.mistake },
+            ].map(row => (
+              <div key={row.label} style={{ lineHeight:1.5 }}>
+                <span style={{ fontFamily:"var(--font-m)", fontSize:9, letterSpacing:1, textTransform:"uppercase", color: row.accent ? "var(--green)" : "var(--muted)", marginRight:6 }}>{row.label}</span>
+                <span style={{ fontFamily:"var(--font-b)", fontSize:13, color: row.accent ? "var(--green)" : "var(--text)", fontWeight: row.accent ? 600 : 400 }}>{row.text}</span>
               </div>
             ))}
           </div>
         )}
-        {showDesc && tips.length === 0 && (
+        {showDesc && !tips && (
           <div style={{ background:"var(--bg3)", borderRadius:6, padding:"10px 12px", fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)" }}>
             No technique notes for this exercise yet.
           </div>
@@ -3027,88 +3032,468 @@ function HistoryScreen({ data }) {
 
 // ── Technique Library (static, instant) ──────────────────────────────────────
 const TECHNIQUE = {
-  "Push-Up":               ["Keep body in straight line from head to heels","Lower chest to 1cm from floor, elbows at 45°","Exhale on push, engage core throughout"],
-  "Diamond Push-Up":       ["Hands form a diamond shape directly under chest","Keep elbows tracking back not flared out","Full lockout at top, squeeze triceps"],
-  "Pike Push-Up":          ["Hips high in inverted-V, hands shoulder width","Lower crown of head toward floor","Press back up explosively, shoulders do the work"],
-  "Dumbbell Bench Press":  ["Retract scapula and plant them into bench","Lower to chest level, elbows at 75° angle","Drive through heels, press in arc not straight up"],
-  "Barbell Bench Press":   ["Arch lower back, 5 points of contact with bench","Bar path slight arc from chest to over shoulders","Leg drive transfers power through the whole chain"],
-  "Dumbbell Fly":          ["Slight bend in elbows maintained throughout","Stretch deep at bottom, squeeze hard at top","Think hugging a barrel, not flapping wings"],
-  "Weighted Dip":          ["Lean slightly forward for chest, stay upright for triceps","Lower until upper arms parallel to floor","Full lockout at top between every rep"],
-  "Tricep Dips":           ["Keep elbows tracking back not flared wide","Control the descent, 2 seconds down","Press through heel of hand not fingers"],
-  "Overhead Press":        ["Bar starts at collarbone, grip just outside shoulders","Squeeze glutes and abs to protect lower back","Lock out fully overhead, ears through arms at top"],
-  "Assisted Pull-Up":      ["Loop band around bar, place knee or foot in band for support","Same form as regular pull-up — dead hang start, chest to bar","Use thinner band as you get stronger — green → purple → no band"],
-  "Pull-Up":               ["Dead hang to start, scapula depressed","Lead with chest to bar, not chin","Lower fully on each rep — full range builds more"],
-  "Chin-Up":               ["Supinated grip activates biceps more","Think elbows to hips rather than chin up","Pause 1 second at top, controlled descent"],
-  "Neutral Grip Pull-Up":  ["Wrists neutral, shoulder width apart","Engage lats before you pull by depressing shoulders","Drive elbows down and back to finish"],
-  "Weighted Pull-Up":      ["Add weight gradually — even 2.5kg changes the stimulus","Maintain same form as bodyweight — no kipping","Full dead hang between reps for max range"],
-  "Weighted Chin-Up":      ["Belt weight should hang freely, not bump knees","Same technique as bodyweight — full ROM","2-3 second negative builds serious strength"],
-  "Inverted Row":          ["Body rigid like a plank throughout","Pull chest to bar, not just hands","Slow 3-second lowering for maximum tension"],
-  "Dumbbell Row":          ["Knee and same-side hand on bench for support","Pull elbow to hip, not straight up","At top: hold 1 second squeezing lat fully"],
-  "Single-Arm Dumbbell Row":["Neutral spine — back parallel to floor","Elbow drives back past torso for full contraction","Don't rotate torso — keep hips square"],
-  "Barbell Row":           ["Hinge at hips, back at 45°, bar just below knees","Pull bar to lower sternum, elbows close to body","Lower with control — the eccentric builds thickness"],
-  "EZ Bar Curl":           ["Elbows pinned to sides throughout the movement","Curl to chin level, squeeze at top","3-second lowering maximizes bicep time under tension"],
-  "EZ Bar Reverse Curl":   ["Overhand grip, wrists neutral not broken","Keep elbows stationary at sides","Develops brachialis and forearm thickness"],
-  "EZ Bar Skull Crusher":  ["Lower bar to forehead or slightly behind","Keep upper arms vertical — only forearms move","Squeeze triceps hard at lockout"],
-  "EZ Bar Upright Row":    ["Grip shoulder width, bar stays close to body","Elbows lead upward to chin level","Avoid shrugging — control the movement"],
-  "Close-Grip Bench Press":["Hands 25-30cm apart — not too narrow or wrists strain","Tuck elbows to 45° angle to body","Full lockout, feel triceps working"],
-  "Barbell Squat":         ["Bar on traps, not neck — create a shelf","Break at hips and knees simultaneously","Drive knees out over toes, chest stays tall"],
-  "Barbell Deadlift":      ["Bar over mid-foot, hip width stance","Hinge at hips first, then bend knees to grip","Push floor away rather than pulling bar up"],
-  "Romanian Deadlift":     ["Slight bend in knees, maintained throughout","Hinge at hips pushing them back — feel hamstring stretch","Stop when back starts to round — not about how low you go"],
-  "Goblet Squat":          ["Hold dumbbell at chest, elbows inside knees","Deep squat — use weight as counterbalance","Great for quad development and mobility"],
-  "Bulgarian Split Squat": ["Front foot 60-70cm from bench","Lower rear knee toward floor — vertical front shin","Most of the weight through front heel"],
-  "Lunge":                 ["Step length so front shin stays vertical","Lower back knee close to floor without touching","Push off front heel to return to start"],
-  "Single-Leg RDL":        ["Stand on slight bend in working leg","Hinge forward while non-working leg extends back","Hip height determines stretch depth — stay controlled"],
-  "Calf Raise":            ["Full range — heel below platform level at bottom","Pause 1 second at top, squeeze hard","Slow tempo — calves respond to time under tension"],
-  "Squat":                 ["Feet shoulder width, toes slightly out","Break parallel — crease of hip below top of knee","Drive knees out, chest proud, weight through full foot"],
-  "Plank":                 ["Forearms under shoulders, body in straight line","Squeeze glutes and abs simultaneously","Breathe normally — don't hold your breath"],
-  "Dead Bug":              ["Lower back pressed into floor throughout","Extend opposite arm and leg slowly","Return to start before switching sides"],
-  "Ab Wheel Rollout":      ["Start on knees, abs braced before moving","Roll out until hips want to drop — that's your limit","Pull back using abs not hip flexors"],
-  "Bicycle Crunch":        ["Don't pull neck — hand lightly behind ear","Rotate shoulder to knee, not elbow","Slow and controlled — speed kills effectiveness"],
-  "Balance Disc Squat":    ["Stand centered on disc, feet hip width","Slower movement needed — disc forces stability","Engages stabilizers traditional squat misses"],
-  "Kettlebell Swing":      ["It's a hip hinge, not a squat","Hike bell back like hiking a football","Snap hips explosively — arms just guide the bell"],
-  "Burpee":                ["Land softly from jump — knees slightly bent","Keep hips low in plank position","Jump with full extension — arms overhead"],
-  "Mountain Climber":      ["Wrists under shoulders, hips level","Drive knee to chest without letting hip rise","Speed is fine but maintain flat back"],
-  "Clean & Press":         ["Explosive hip extension launches the bell","Catch in rack position — bell resting on forearm","Press strict — no leg drive unless push press"],
-  "Band Pull-Apart":       ["Arms straight in front, hands shoulder width","Pull apart to chest, hold 1 second","Retract scapula fully — works rear delts hard"],
-  "Dumbbell Shoulder Press":["Dumbbells at ear level, elbows at 90° before pressing","Press straight up, don't flare elbows forward","Lower slowly — 3 seconds down for more stimulus"],
-  "Dumbbell Curl":         ["Elbows pinned to sides — don't swing the body","Supinate wrist as you curl up for full bicep contraction","Full extension at bottom — don't cheat the range"],
-  "Kettlebell Row":        ["Same as dumbbell row — knee and hand on bench","Drive elbow back past torso at the top","Pause at top to eliminate momentum"],
-  "Single-Leg Balance Disc":["Stand on one leg centered on disc","Arms out for balance initially, then reduce","Builds proprioception and ankle stability"],
-  "Tricep Overhead Ext":   ["Keep elbows pointing forward, not flaring","Lower weight behind head until forearms touch biceps","Press straight up — elbows stay fixed"],
-  "Thoracic Extension":    ["Sit on floor, upper back (not lower!) on bench edge — just below shoulder blades","Hands behind head, slowly extend back over bench edge — hold 2-3 seconds","Never force — let gravity do the work, breathe out as you extend"],
-  "Single-Arm DB Press":   ["Brace core hard to resist rotation — that's the point","Press at slight angle inward, not straight up","Pause at chest to eliminate momentum"],
-  "Single-Leg Glute Bridge":["Drive through heel of working leg only","Squeeze glute hard at top — hold 2 seconds","Non-working leg extended or bent — either works"],
-  "Balance Disc Plank":    ["Forearms on disc creates instability — engage everything","Micro-adjustments constantly — that's the stimulus","Progress by adding time, not movement"],
-  "Banded Squat":          ["Band around knees creates abductor demand","Drive knees out against band throughout","Adds hip stability work to the squat pattern"],
-  "EZ Bar Complex":        ["Move between exercises without putting bar down","Row → curl → overhead press in sequence","Light weight — fatigue accumulates fast"],
-  "Thruster":              ["Front rack position: elbows high, bar on shoulders","Squat, then use momentum to press at top","One fluid movement — not squat then press"],
-  "Resistance Band Press": ["Anchor band behind you at chest height","Step forward for more tension, back for less","Control the return — don't let band snap back"],
+  "Push-Up": {
+    setup:    "Hands under the shoulders, body in a straight line from head to heels, core braced.",
+    movement: "Lower the chest to about 1cm from the floor with elbows at 45°, then exhale and press back up.",
+    feel:     "Work across the chest and triceps, with the core holding the plank line steady.",
+    mistake:  "Letting the hips sag or pike — squeeze the glutes and abs so the body stays one rigid line.",
+  },
+  "Diamond Push-Up": {
+    setup:    "Hands together forming a diamond shape directly under the chest.",
+    movement: "Lower under control keeping the elbows tracking back, then press to full lockout and squeeze the triceps.",
+    feel:     "A strong emphasis on the triceps and the inner chest.",
+    mistake:  "Letting the elbows flare out wide — keep them tucked toward the ribs to keep the load on the triceps.",
+  },
+  "Pike Push-Up": {
+    setup:    "Hips high in an inverted V, hands shoulder-width, head between the arms.",
+    movement: "Lower the crown of the head toward the floor, then press back up explosively.",
+    feel:     "The shoulders (front delts) do the work, with the triceps assisting.",
+    mistake:  "Dropping the hips into a flat push-up — keep them piked high so the load stays on the shoulders.",
+  },
+  "Dumbbell Bench Press": {
+    setup:    "Retract the shoulder blades and plant them into the bench, feet flat, dumbbells at chest level.",
+    movement: "Lower to chest level with the elbows at about 75°, then press up in a slight arc.",
+    feel:     "A stretch and contraction across the chest, with the triceps finishing the press.",
+    mistake:  "Flaring the elbows to 90° — keep them tucked to protect the shoulder and load the chest.",
+  },
+  "Barbell Bench Press": {
+    setup:    "Arch the lower back, five points of contact, bar over the eyes, grip just outside the shoulders.",
+    movement: "Lower to the chest and press back in a slight arc toward over the shoulders, driving through the legs.",
+    feel:     "Power through the chest, shoulders and triceps, with leg drive feeding the whole chain.",
+    mistake:  "Bouncing the bar off the chest or losing the arch — control the descent and keep the upper back tight.",
+  },
+  "Dumbbell Fly": {
+    setup:    "Lie back with the dumbbells pressed up and a slight, fixed bend in the elbows.",
+    movement: "Open the arms wide into a deep chest stretch, then squeeze back together over the chest.",
+    feel:     "A deep stretch across the outer chest at the bottom, hard contraction at the top.",
+    mistake:  "Bending and straightening the elbows like a press — keep the elbow angle fixed; think hugging a barrel.",
+  },
+  "Weighted Dip": {
+    setup:    "Support on parallel bars, weight belt hanging freely, arms locked out.",
+    movement: "Lower until the upper arms are parallel to the floor, then press to full lockout — lean forward for chest, upright for triceps.",
+    feel:     "Chest or triceps depending on lean — forward loads the chest, upright the triceps.",
+    mistake:  "Dropping too deep or shrugging into the shoulders — stop at parallel and keep the shoulders down.",
+  },
+  "Tricep Dips": {
+    setup:    "Hands on a bench or bars behind you, elbows pointing straight back.",
+    movement: "Lower under control for about 2 seconds, then press up through the heel of the hand.",
+    feel:     "Concentrated work in the triceps behind the upper arm.",
+    mistake:  "Letting the elbows flare wide or pressing through the fingers — keep the elbows back and drive through the palm heel.",
+  },
+  "Overhead Press": {
+    setup:    "Bar at the collarbone, grip just outside the shoulders, glutes and abs braced.",
+    movement: "Press overhead, moving the head slightly back then through, to full lockout with the ears past the arms.",
+    feel:     "Shoulders drive the press, triceps lock it out, core stays tight to protect the back.",
+    mistake:  "Arching the lower back to press — squeeze the glutes and abs so the ribs stay down.",
+  },
+  "Assisted Pull-Up": {
+    setup:    "Loop a band around the bar and place a knee or foot in it, starting from a dead hang.",
+    movement: "Pull the chest toward the bar keeping the shoulders depressed, then lower fully.",
+    feel:     "The lats and upper back working, with the band sharing the load at the bottom.",
+    mistake:  "Relying on the band to bounce you up — use a thinner band as you get stronger (green → purple → none).",
+  },
+  "Pull-Up": {
+    setup:    "Dead hang, overhand grip, shoulder blades depressed and set.",
+    movement: "Lead with the chest to the bar, then lower all the way to a full hang each rep.",
+    feel:     "A strong pull through the lats and mid-back, biceps assisting.",
+    mistake:  "Cutting the range short at the bottom — a full dead hang each rep builds more.",
+  },
+  "Chin-Up": {
+    setup:    "Supinated (palms-toward-you) grip, shoulder-width, dead hang.",
+    movement: "Drive the elbows toward the hips to rise, pause 1 second at the top, then lower under control.",
+    feel:     "More bicep involvement alongside the lats than a pull-up.",
+    mistake:  "Thinking 'chin up' and craning the neck — think elbows to hips and let the back do the work.",
+  },
+  "Neutral Grip Pull-Up": {
+    setup:    "Wrists neutral (palms facing each other), hands shoulder-width apart.",
+    movement: "Depress the shoulders to engage the lats first, then drive the elbows down and back.",
+    feel:     "Lats and mid-back with a shoulder-friendly wrist position; biceps assist.",
+    mistake:  "Yanking with the arms before the lats engage — set the shoulders down first.",
+  },
+  "Weighted Pull-Up": {
+    setup:    "Add weight via belt or dumbbell, dead hang, grip set.",
+    movement: "Pull with the same strict form as bodyweight — no kipping — and lower to a full hang.",
+    feel:     "Intense lat and upper-back load; even 2.5kg noticeably raises the stimulus.",
+    mistake:  "Kipping or swinging to move the weight — keep it strict and full range.",
+  },
+  "Weighted Chin-Up": {
+    setup:    "Belt weight hanging freely so it won't bump the knees, supinated grip, dead hang.",
+    movement: "Rise with strict form, then lower with a slow 2–3 second negative.",
+    feel:     "Heavy work through the biceps and lats.",
+    mistake:  "Letting the weight swing or shortening the range — full ROM with a controlled negative.",
+  },
+  "Inverted Row": {
+    setup:    "Under a fixed bar, body rigid like a plank, heels planted.",
+    movement: "Pull the chest to the bar, then lower slowly over about 3 seconds.",
+    feel:     "Mid-back and lats squeezing, with the core holding the plank.",
+    mistake:  "Letting the hips sag or yanking with the hands — pull the chest, not just the hands, and stay rigid.",
+  },
+  "Dumbbell Row": {
+    setup:    "Knee and same-side hand on a bench, back flat, dumbbell hanging.",
+    movement: "Pull the elbow up toward the hip, hold 1 second squeezing the lat, then lower.",
+    feel:     "A strong squeeze through the lat on the working side.",
+    mistake:  "Pulling straight up or rotating the torso — drive the elbow to the hip and keep the hips square.",
+  },
+  "Single-Arm Dumbbell Row": {
+    setup:    "Hinge with a neutral spine, back roughly parallel to the floor.",
+    movement: "Drive the elbow back past the torso for a full contraction, then lower under control.",
+    feel:     "Lat and mid-back of the working side, deep in the contraction.",
+    mistake:  "Rotating the torso to lift more — keep the hips square and let the back do the pulling.",
+  },
+  "Barbell Row": {
+    setup:    "Hinge at the hips, back at about 45°, bar just below the knees.",
+    movement: "Pull the bar to the lower sternum with the elbows close, then lower with control.",
+    feel:     "Thickness work across the whole mid-back; the eccentric loads it hardest.",
+    mistake:  "Standing up too tall or jerking the bar — keep the torso angle and control the lowering.",
+  },
+  "EZ Bar Curl": {
+    setup:    "Grip the EZ bar at the angled position, elbows pinned to the sides.",
+    movement: "Curl to chin level, squeeze the biceps, then lower over about 3 seconds.",
+    feel:     "Biceps under long tension, especially on the slow lowering.",
+    mistake:  "Swinging the body or letting the elbows drift forward — keep them pinned and let the arms do the work.",
+  },
+  "EZ Bar Reverse Curl": {
+    setup:    "Overhand grip on the EZ bar, wrists neutral (not bent), elbows at the sides.",
+    movement: "Curl up keeping the elbows stationary, then lower under control.",
+    feel:     "The brachialis and forearms working to build arm thickness.",
+    mistake:  "Breaking the wrists back — keep them neutral so the load stays on the forearm and brachialis.",
+  },
+  "EZ Bar Skull Crusher": {
+    setup:    "Lie back, EZ bar over the chest, upper arms vertical.",
+    movement: "Lower the bar to the forehead or just behind it, then press up and squeeze the triceps at lockout.",
+    feel:     "A stretch and contraction through the triceps.",
+    mistake:  "Letting the upper arms drift — keep them vertical so only the forearms move.",
+  },
+  "EZ Bar Upright Row": {
+    setup:    "Grip shoulder-width, bar resting against the thighs, close to the body.",
+    movement: "Lead with the elbows upward to chin level, then lower under control.",
+    feel:     "Side delts and upper traps taking the load.",
+    mistake:  "Shrugging or letting the bar drift away — lead with the elbows and keep the bar close.",
+  },
+  "Close-Grip Bench Press": {
+    setup:    "Hands 25–30cm apart, elbows tucked, bar over the chest.",
+    movement: "Lower with the elbows at about 45° to the body, then press to full lockout.",
+    feel:     "Triceps doing most of the work, inner chest assisting.",
+    mistake:  "Gripping too narrow — that strains the wrists; keep the hands about 25–30cm apart.",
+  },
+  "Barbell Squat": {
+    setup:    "Bar on the traps (create a shelf, not on the neck), feet shoulder-width, chest tall.",
+    movement: "Break at the hips and knees together, descend, then drive up with the knees tracking over the toes.",
+    feel:     "Quads and glutes driving, with the whole trunk braced.",
+    mistake:  "Letting the knees cave or the chest drop — drive the knees out and keep the chest tall.",
+  },
+  "Barbell Deadlift": {
+    setup:    "Bar over mid-foot, hip-width stance, hinge to grip with a flat back.",
+    movement: "Hinge at the hips first then bend the knees to reach the bar; stand by pushing the floor away.",
+    feel:     "Powerful drive through the glutes, hamstrings and the whole posterior chain.",
+    mistake:  "Rounding the back or yanking the bar up — push the floor away and keep the spine neutral.",
+  },
+  "Romanian Deadlift": {
+    setup:    "Slight, fixed knee bend, bar against the thighs, shoulders back.",
+    movement: "Hinge at the hips, pushing them back and feeling the hamstrings stretch; stop before the back rounds.",
+    feel:     "A deep stretch along the hamstrings and glutes.",
+    mistake:  "Chasing depth until the back rounds — it's about the hip hinge, not how low the bar goes.",
+  },
+  "Goblet Squat": {
+    setup:    "Hold a dumbbell at the chest, elbows inside the knees, feet shoulder-width.",
+    movement: "Squat deep using the weight as a counterbalance, then drive back up tall.",
+    feel:     "Quads and glutes, with the upright torso opening the hips.",
+    mistake:  "Letting the chest collapse forward — keep it tall and use the weight to stay upright.",
+  },
+  "Bulgarian Split Squat": {
+    setup:    "Rear foot on a bench, front foot 60–70cm ahead, torso tall.",
+    movement: "Lower the rear knee toward the floor keeping the front shin vertical, then drive up through the front heel.",
+    feel:     "Front-leg quad and glute working hard, with a stretch in the rear hip flexor.",
+    mistake:  "Placing the front foot too close so the knee shoots past the toes — set it far enough forward.",
+  },
+  "Lunge": {
+    setup:    "Step out so the front shin will stay vertical at the bottom.",
+    movement: "Lower the back knee close to the floor without touching, then push off the front heel to return.",
+    feel:     "Front-leg quad and glute, with balance demand through the whole leg.",
+    mistake:  "Taking too short a step so the knee overshoots the toes — lengthen the stride.",
+  },
+  "Single-Leg RDL": {
+    setup:    "Stand on one leg with a slight bend in the working knee.",
+    movement: "Hinge forward as the non-working leg extends straight back, then return under control.",
+    feel:     "A stretch and load through the hamstring and glute of the standing leg, plus balance work.",
+    mistake:  "Rushing and losing balance — control the hinge; hip height sets the stretch, not speed.",
+  },
+  "Calf Raise": {
+    setup:    "Balls of the feet on a step, heels free to drop below the platform.",
+    movement: "Lower the heels for a full stretch, then rise and pause 1 second squeezing hard.",
+    feel:     "A stretch at the bottom and a hard squeeze through the calves at the top.",
+    mistake:  "Bouncing through partial reps — use full range and a slow tempo; calves respond to time under tension.",
+  },
+  "Squat": {
+    setup:    "Feet shoulder-width, toes slightly out, chest proud.",
+    movement: "Break parallel (hip crease below the top of the knee), then drive up through the full foot.",
+    feel:     "Quads and glutes, with weight balanced through the whole foot.",
+    mistake:  "Letting the knees cave in or coming onto the toes — drive the knees out and keep the weight mid-foot.",
+  },
+  "Plank": {
+    setup:    "Forearms under the shoulders, body in a straight line from head to heels.",
+    movement: "Hold the position, squeezing the glutes and abs simultaneously.",
+    feel:     "Deep bracing across the abs and the whole trunk.",
+    mistake:  "Letting the hips sag or holding the breath — keep the line and breathe normally.",
+  },
+  "Dead Bug": {
+    setup:    "On your back, lower back pressed flat into the floor, arms and knees up.",
+    movement: "Slowly extend the opposite arm and leg, then return before switching sides.",
+    feel:     "The deep core working to keep the lower back pinned.",
+    mistake:  "Letting the lower back arch off the floor — if it lifts, use a smaller range.",
+  },
+  "Ab Wheel Rollout": {
+    setup:    "On the knees, abs braced hard before moving.",
+    movement: "Roll out until the hips are about to drop, then pull back using the abs.",
+    feel:     "Intense tension through the entire front core.",
+    mistake:  "Pulling back with the hip flexors or letting the lower back sag — drive the movement from the abs.",
+  },
+  "Bicycle Crunch": {
+    setup:    "On your back, hands lightly behind the ears, legs up.",
+    movement: "Rotate a shoulder toward the opposite knee, slow and controlled, alternating sides.",
+    feel:     "The obliques and abs working through the rotation.",
+    mistake:  "Pulling on the neck or moving fast — rotate the shoulder, not the elbow, and slow down.",
+  },
+  "Balance Disc Squat": {
+    setup:    "Stand centered on the balance disc, feet hip-width.",
+    movement: "Squat slowly — the disc forces you to stabilize throughout.",
+    feel:     "Quads and glutes plus the small stabilizers a normal squat misses.",
+    mistake:  "Moving too fast and losing the center — slow down and stay balanced over the disc.",
+  },
+  "Kettlebell Swing": {
+    setup:    "Hip-width stance, kettlebell a little ahead, shoulders back — it's a hinge, not a squat.",
+    movement: "Hike the bell back between the legs, then snap the hips forward to float it up; the arms just guide.",
+    feel:     "Explosive drive through the glutes and hamstrings, powered by the hips.",
+    mistake:  "Squatting and lifting with the arms — hinge at the hips and let the snap do the work.",
+  },
+  "Burpee": {
+    setup:    "Stand tall, ready to drop into a plank.",
+    movement: "Squat down, kick to a plank, return, then jump with full extension and arms overhead.",
+    feel:     "Full-body conditioning — legs, chest and core all working.",
+    mistake:  "Landing stiff-legged or letting the hips sag in the plank — land soft and keep the plank tight.",
+  },
+  "Mountain Climber": {
+    setup:    "Push-up position, wrists under the shoulders, hips level.",
+    movement: "Drive one knee to the chest at a time without letting the hips rise.",
+    feel:     "Core and hip flexors working, with cardio demand building.",
+    mistake:  "Letting the hips bounce up — keep the back flat even as the pace increases.",
+  },
+  "Clean & Press": {
+    setup:    "Kettlebell between the feet, hips loaded, back flat.",
+    movement: "Explosively extend the hips to launch the bell, catch it in the rack, then press overhead.",
+    feel:     "A full-body power chain from the hips into an overhead press.",
+    mistake:  "Letting the bell crash onto the forearm — guide it into a soft rack, and press strict.",
+  },
+  "Band Pull-Apart": {
+    setup:    "Arms straight out in front, hands shoulder-width, band taut.",
+    movement: "Pull the band apart to the chest, hold 1 second, then return slowly.",
+    feel:     "Rear delts and mid-back squeezing as the shoulder blades retract.",
+    mistake:  "Bending the elbows or shrugging — keep the arms straight and retract the shoulder blades fully.",
+  },
+  "Dumbbell Shoulder Press": {
+    setup:    "Dumbbells at ear level, elbows at about 90°, core braced.",
+    movement: "Press straight up without flaring the elbows forward, then lower slowly over about 3 seconds.",
+    feel:     "Shoulders pressing, triceps locking out.",
+    mistake:  "Flaring the elbows forward or arching the back — press straight up and keep the ribs down.",
+  },
+  "Dumbbell Curl": {
+    setup:    "Dumbbells at the sides, elbows pinned, shoulders relaxed.",
+    movement: "Curl up supinating the wrist for a full contraction, then lower to full extension.",
+    feel:     "Biceps peak contraction at the top, stretch at the bottom.",
+    mistake:  "Swinging the body or cutting the range short — keep the elbows pinned and fully extend at the bottom.",
+  },
+  "Kettlebell Row": {
+    setup:    "Knee and hand on a bench, back flat, kettlebell hanging.",
+    movement: "Drive the elbow back past the torso, pause at the top, then lower.",
+    feel:     "A strong lat squeeze on the working side.",
+    mistake:  "Using momentum — pause at the top so the back, not the swing, does the work.",
+  },
+  "Single-Leg Balance Disc": {
+    setup:    "Stand on one leg centered on the disc, arms out for balance.",
+    movement: "Hold, gradually reducing arm assistance as balance improves.",
+    feel:     "Constant micro-work through the ankle and hip stabilizers.",
+    mistake:  "Fighting to stay dead still — small adjustments are the point; don't rush to remove the arms.",
+  },
+  "Tricep Overhead Ext": {
+    setup:    "Weight overhead, elbows pointing forward, core braced.",
+    movement: "Lower behind the head until the forearms touch the biceps, then press straight up.",
+    feel:     "A deep stretch through the long head of the triceps.",
+    mistake:  "Letting the elbows flare out — keep them pointing forward and fixed in place.",
+  },
+  "Thoracic Extension": {
+    setup:    "Sit on the floor with the upper back (just below the shoulder blades, not the lower back) on a bench edge, hands behind the head.",
+    movement: "Slowly extend back over the bench edge, hold 2–3 seconds, breathing out as you extend.",
+    feel:     "A gentle opening through the mid-back (thoracic spine).",
+    mistake:  "Placing the bench under the lower back or forcing it — support the mid-back and let gravity do the work.",
+  },
+  "Single-Arm DB Press": {
+    setup:    "Lie on a bench with one dumbbell, core braced hard to resist rotation.",
+    movement: "Press at a slight inward angle, pausing at the chest to kill momentum.",
+    feel:     "Chest and shoulder pressing, with the core fighting the twist — that anti-rotation is the point.",
+    mistake:  "Letting the torso rotate toward the weight — brace the core so the trunk stays square.",
+  },
+  "Single-Leg Glute Bridge": {
+    setup:    "On your back, one foot planted, the other leg extended or bent.",
+    movement: "Drive through the planted heel to lift the hips, squeeze the glute, hold 2 seconds.",
+    feel:     "A hard contraction in the glute of the working leg.",
+    mistake:  "Pushing through the toes or arching the back — drive through the heel and lift with the glute.",
+  },
+  "Balance Disc Plank": {
+    setup:    "Forearms on a balance disc, body in a straight line, feet planted.",
+    movement: "Hold while the disc wobbles, making constant micro-adjustments to stay level.",
+    feel:     "The whole core and shoulders working overtime to stay stable.",
+    mistake:  "Trying to add movement — progress by adding time; the instability is already the stimulus.",
+  },
+  "Banded Squat": {
+    setup:    "Loop a band around the knees, feet shoulder-width.",
+    movement: "Squat while driving the knees out against the band throughout.",
+    feel:     "Quads and glutes plus extra work in the hip abductors.",
+    mistake:  "Letting the band pull the knees in — actively press them out the whole rep.",
+  },
+  "EZ Bar Complex": {
+    setup:    "Load a light EZ bar — fatigue accumulates fast across the sequence.",
+    movement: "Flow row → curl → overhead press without setting the bar down.",
+    feel:     "A building burn across the back, biceps and shoulders as the sequence continues.",
+    mistake:  "Going too heavy — the weight must serve the weakest movement in the chain.",
+  },
+  "Thruster": {
+    setup:    "Bar in a front-rack position, elbows high, resting on the shoulders.",
+    movement: "Squat, then use the drive out of the bottom to press the bar overhead in one fluid motion.",
+    feel:     "A full-body effort linking the legs into an overhead press.",
+    mistake:  "Squatting and pressing as two separate moves — let the leg drive flow into the press.",
+  },
+  "Resistance Band Press": {
+    setup:    "Anchor the band behind you at chest height, split stance, handles at the chest.",
+    movement: "Press forward to full extension, then control the return without letting the band snap back.",
+    feel:     "Chest and triceps working against constant band tension.",
+    mistake:  "Letting the band recoil fast — control the return; step forward for more tension, back for less.",
+  },
 
   // ── TRX / suspension ──
   // Load is set by body angle, not plates: walk the feet forward to make a
   // press harder or a row easier, and back to reverse it.
-  "TRX Chest Press":       ["Straps at mid-length, hands under shoulders, body rigid plank","Lower until hands are level with your chest, elbows 45° not flared","Walk feet forward to make it harder, step back to make it easier"],
-  "TRX Chest Fly":         ["Arms wide with a soft, fixed elbow bend — don't let it change","Open only to a comfortable chest stretch, never past shoulder line","Smaller range than you think — shoulder joint is exposed here"],
-  "TRX Tricep Extension":  ["Face away from anchor, hands overhead, elbows pointing forward","Only the forearms move — upper arms stay locked in place","Keep ribs down; if the lower back arches, stand more upright"],
-  "TRX Pike Push-Up":      ["Feet in foot cradles, body in a push-up plank","Pike the hips high first, then lower the crown of the head down","Straps will wobble — brace hard and slow the tempo"],
-  "TRX Low Row":           ["Palms facing each other, body straight, heels planted","Pull elbows past your ribs, squeeze shoulder blades together","Walk feet forward to increase load — more horizontal is harder"],
-  "TRX High Row":          ["Anchor high, elbows flare wide at shoulder height","Pull hands toward your forehead, not your chest","Targets rear delts and mid-traps — go lighter and slower than a low row"],
-  "TRX Y-Fly":             ["Arms sweep overhead into a Y, thumbs up","Lead with the outside of the hands, keep elbows nearly straight","Small range done well beats a big range with shrugging"],
-  "TRX Bicep Curl":        ["Palms up, elbows locked high at shoulder height","Curl your hands toward your forehead, elbows never drop","Body stays a rigid plank — no hinging at the hips"],
-  "TRX Squat":             ["Hold straps at chest, arms light — they guide, not pull","Sit back and down, chest tall, knees tracking over toes","Use the straps only for balance so the legs keep doing the work"],
-  "TRX Bulgarian Split Squat":["Rear foot in the cradle, front foot far enough forward","Drop straight down, front shin near vertical, torso tall","Front knee stays over mid-foot — don't let it cave inward"],
-  "TRX Hamstring Curl":    ["Lie on your back, heels in the cradles, arms flat on floor","Bridge hips up FIRST, then curl heels toward your glutes","Hips stay high the whole set — dropping them kills the tension"],
-  "TRX Hip Hinge":         ["Straps at mid-length, hinge back at the hips, not the spine","Feel the stretch in the hamstrings, back stays flat","Finish by squeezing glutes — stand tall, don't overextend"],
-  "TRX Squat to Row":      ["Squat down first, arms extended, then row as you stand","One smooth movement — legs drive, arms finish","Great conditioning: keep rest short and rhythm steady"],
-  "TRX Burpee":            ["Feet in cradles, start in plank, tuck knees to chest","Push hips up into a pike, then extend back to plank","Control the return — the straps punish sloppy reps"],
-  "TRX Mountain Climber":  ["Feet in cradles, hands under shoulders, hips level","Drive one knee to chest, keep hips from bouncing up","Straps make this far less stable — slower is stronger here"],
-  "TRX Plank":             ["Forearms on floor, feet in cradles, body one straight line","Squeeze glutes and brace abs to stop the straps swinging","Stop the set when the hips start to sag — quality over clock"],
-  "TRX Pike":              ["Start in a plank with feet in the cradles","Lift hips toward the ceiling, legs straight, head between arms","Return to plank slowly — no collapsing back down"],
-  "TRX Body Saw":          ["Forearm plank with feet in cradles, body rigid","Push the floor away to slide back, then pull forward","Move only a few inches — the smaller the saw, the harder the brace"],
+  "TRX Chest Press": {
+    setup:    "Straps mid-length, hands under the shoulders, body a rigid plank.",
+    movement: "Lower until the hands are level with the chest, elbows at 45°, then press back to a plank.",
+    feel:     "Chest and triceps working while the core holds the plank line.",
+    mistake:  "Flaring the elbows or letting the hips sag — keep elbows at 45° and the body rigid. Walk the feet forward for harder, back for easier.",
+  },
+  "TRX Chest Fly": {
+    setup:    "Straps set, arms wide with a soft, fixed elbow bend, body leaning in.",
+    movement: "Open only to a comfortable chest stretch (never past the shoulder line), then squeeze back together.",
+    feel:     "A stretch across the chest — kept short because the shoulder joint is exposed here.",
+    mistake:  "Letting the elbow bend change or going too wide — keep the elbow angle fixed and the range modest.",
+  },
+  "TRX Tricep Extension": {
+    setup:    "Face away from the anchor, hands overhead, elbows pointing forward, body leaning in.",
+    movement: "Bend only at the elbows to lower behind the head, then extend; the upper arms stay locked.",
+    feel:     "Concentrated triceps work along the back of the upper arm.",
+    mistake:  "Letting the lower back arch — keep the ribs down; stand more upright if it's too hard.",
+  },
+  "TRX Pike Push-Up": {
+    setup:    "Feet in the foot cradles, body in a push-up plank.",
+    movement: "Pike the hips high first, then lower the crown of the head down and press back up.",
+    feel:     "Shoulders leading, with the core fighting the strap wobble.",
+    mistake:  "Rushing while the straps swing — brace hard and slow the tempo.",
+  },
+  "TRX Low Row": {
+    setup:    "Palms facing each other, body straight, heels planted, leaning back.",
+    movement: "Pull the elbows past the ribs, squeezing the shoulder blades together, then lower.",
+    feel:     "Mid-back and lats squeezing through the pull.",
+    mistake:  "Hinging at the hips to help — stay straight; walk the feet forward (more horizontal) to increase load.",
+  },
+  "TRX High Row": {
+    setup:    "Anchor high, elbows flared wide at shoulder height, leaning back.",
+    movement: "Pull the hands toward the forehead, then lower slowly.",
+    feel:     "Rear delts and mid-traps working — a lighter, slower movement than a low row.",
+    mistake:  "Going too heavy or fast and pulling to the chest — pull to the forehead and keep it controlled.",
+  },
+  "TRX Y-Fly": {
+    setup:    "Arms overhead in a Y, thumbs up, body leaning back.",
+    movement: "Sweep the arms into the Y leading with the outside of the hands, elbows nearly straight, then return.",
+    feel:     "Lower traps and rear delts working through a small, precise range.",
+    mistake:  "Shrugging or bending the elbows — small range done well beats a big range with shrugging.",
+  },
+  "TRX Bicep Curl": {
+    setup:    "Palms up, elbows locked high at shoulder height, body a rigid plank leaning back.",
+    movement: "Curl the hands toward the forehead without letting the elbows drop, then lower.",
+    feel:     "Biceps under tension set by the body angle.",
+    mistake:  "Hinging at the hips or dropping the elbows — keep the plank and the elbows high.",
+  },
+  "TRX Squat": {
+    setup:    "Hold the straps at the chest, arms light — they guide, not pull.",
+    movement: "Sit back and down with the chest tall and knees over the toes, then stand.",
+    feel:     "Quads and glutes doing the work, the straps only aiding balance.",
+    mistake:  "Pulling on the straps to stand — use them for balance and let the legs drive.",
+  },
+  "TRX Bulgarian Split Squat": {
+    setup:    "Rear foot in the cradle, front foot far enough forward, torso tall.",
+    movement: "Drop straight down with the front shin near vertical, then drive back up.",
+    feel:     "Front-leg quad and glute, with balance demand from the suspended rear foot.",
+    mistake:  "Letting the front knee cave inward — keep it tracking over the mid-foot.",
+  },
+  "TRX Hamstring Curl": {
+    setup:    "Lie on your back, heels in the cradles, arms flat on the floor.",
+    movement: "Bridge the hips up first, then curl the heels toward the glutes; reverse under control.",
+    feel:     "Hamstrings and glutes working hard to keep the hips high.",
+    mistake:  "Letting the hips drop during the set — keep them high the whole time or the tension is lost.",
+  },
+  "TRX Hip Hinge": {
+    setup:    "Straps at mid-length, hold and hinge back at the hips, back flat.",
+    movement: "Push the hips back feeling the hamstring stretch, then stand and squeeze the glutes.",
+    feel:     "A stretch through the hamstrings, glutes finishing the movement.",
+    mistake:  "Rounding the spine or overextending at the top — hinge at the hips and stand tall without leaning back.",
+  },
+  "TRX Squat to Row": {
+    setup:    "Hold the straps, arms extended, in a squat-ready stance.",
+    movement: "Squat down first, then row as you stand — one smooth movement, legs driving and arms finishing.",
+    feel:     "A full-body conditioning blend of legs and back.",
+    mistake:  "Turning it into two separate moves — keep it smooth and the rhythm steady with short rest.",
+  },
+  "TRX Burpee": {
+    setup:    "Feet in the cradles, starting in a plank.",
+    movement: "Tuck the knees to the chest, push the hips up into a pike, then extend back to the plank.",
+    feel:     "Core and shoulders working through the tuck, with cardio demand.",
+    mistake:  "Letting the return get sloppy — control it; the straps punish loose reps.",
+  },
+  "TRX Mountain Climber": {
+    setup:    "Feet in the cradles, hands under the shoulders, hips level.",
+    movement: "Drive one knee to the chest at a time, keeping the hips from bouncing up.",
+    feel:     "Core and hip flexors working on an unstable base.",
+    mistake:  "Letting the hips bounce — the straps make this less stable, so go slower and stay controlled.",
+  },
+  "TRX Plank": {
+    setup:    "Forearms on the floor, feet in the cradles, body one straight line.",
+    movement: "Hold, squeezing the glutes and bracing the abs to stop the straps swinging.",
+    feel:     "The whole core working to resist the strap movement.",
+    mistake:  "Letting the hips sag — end the set on quality, not the clock.",
+  },
+  "TRX Pike": {
+    setup:    "Start in a plank with the feet in the cradles.",
+    movement: "Lift the hips toward the ceiling with straight legs, head between the arms, then return slowly.",
+    feel:     "Deep lower-ab and hip-flexor work through the pike.",
+    mistake:  "Collapsing back down fast — lower slowly with control.",
+  },
+  "TRX Body Saw": {
+    setup:    "Forearm plank with the feet in the cradles, body rigid.",
+    movement: "Push the floor away to slide back, then pull forward — moving only a few inches.",
+    feel:     "An intense anti-extension brace across the core.",
+    mistake:  "Making the saw too big — the smaller the range, the harder the brace works.",
+  },
 
   // ── Bodyweight additions ──
-  "Superman Hold":         ["Face down, arms extended forward, legs straight","Lift arms, chest and thighs off the floor together","Look at the floor to keep the neck neutral — don't crane up"],
-  "Hollow Hold":           ["Lower back pressed flat into the floor — this is the whole exercise","Arms overhead, legs straight, both lifted just off the ground","If the back lifts, bend the knees or raise the legs higher"],
+  "Superman Hold": {
+    setup:    "Face down, arms extended forward, legs straight.",
+    movement: "Lift the arms, chest and thighs off the floor together and hold.",
+    feel:     "The lower back, glutes and mid-back contracting.",
+    mistake:  "Craning the neck up — look at the floor to keep it neutral.",
+  },
+  "Hollow Hold": {
+    setup:    "On your back, lower back pressed flat into the floor — that flat contact is the whole exercise.",
+    movement: "Arms overhead and legs straight, lift both just off the ground and hold.",
+    feel:     "Deep tension through the entire front core.",
+    mistake:  "Letting the lower back lift off the floor — bend the knees or raise the legs higher until it stays flat.",
+  },
 };
 
 // ── 1RM & cross-exercise estimation ──────────────────────────────────────────
@@ -3487,7 +3872,7 @@ function FavouritesScreen({ data, setData, onBack }) {
             <span style={{ fontSize: 20 }}>{isFav ? "❤️" : "🤍"}</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: "var(--font-h)", fontWeight: 700, fontSize: 15 }}>{ex}</div>
-              {TECHNIQUE[ex] && <div style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{TECHNIQUE[ex][0]}</div>}
+              {TECHNIQUE[ex] && <div style={{ fontFamily: "var(--font-m)", fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{TECHNIQUE[ex].movement}</div>}
             </div>
           </div>
         );

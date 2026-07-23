@@ -262,8 +262,12 @@ eq("rep-target AI proposals label themselves too",
 console.log("\n📋 TEST 15: Technique Cues Cover Every Exercise");
 const modeExercises = [...new Set(Object.values(T.MODE_EXERCISE_DB).flatMap(db => Object.values(db).flat()).map(e => e.name))];
 eq("every TRX/BW mode exercise has technique cues", modeExercises.filter(n => !T.TECHNIQUE[n]), []);
-const badCues = modeExercises.filter(n => !Array.isArray(T.TECHNIQUE[n]) || T.TECHNIQUE[n].length < 3);
-eq("each has at least 3 cues", badCues, []);
+const CUE_FIELDS = ["setup", "movement", "feel", "mistake"];
+const badCues = modeExercises.filter(n => {
+  const t = T.TECHNIQUE[n];
+  return !t || CUE_FIELDS.some(f => typeof t[f] !== "string" || !t[f].trim());
+});
+eq("each has setup/movement/feel/mistake", badCues, []);
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log("\n" + "═".repeat(60));
