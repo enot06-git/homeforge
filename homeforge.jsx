@@ -536,144 +536,280 @@ const DAY_TEMPLATES = {
 //   Piriformis: spine-health.com, NIH StatPearls
 //   Hold times: Feland 2001 — 60s holds superior for adults ≥60y; ACSM recommends 60s for older adults
 // Central exercise definitions — deduped. Routines below reference these by name.
+//   region     = "upper" | "lower" | "hips". Drives swap suggestions (same region first).
 //   metricType drives how the card header reads:
 //     "hold"     — static hold.        Fields: holdSeconds, perSide
+//     "flow"     — continuous motion.  Fields: holdSeconds (read as total duration), perSide
 //     "reps"     — repetitions.        Fields: sets, reps, perSide
 //     "repsHold" — reps with a hold.   Fields: reps, holdSeconds, perSide
-//   sets (optional) also renders as a "× N sets" suffix on hold/repsHold.
-//   sec = estimated duration, used only for time-budget math in getStretchItems.
+//   sets (optional) also renders as a "× N sets" suffix on hold/flow/repsHold.
+//   sec = estimated duration PER SET PER SIDE, used only for time-budget math.
+//   eq  = equipment required. "bodyweight" means nothing beyond a clear wall or floor.
 //   Description split into setup / movement / feel / mistake (feel is highlighted in the card).
 const EXERCISES = {
+
+  // ── Upper back · thoracic · scapular · neck (kyphosis) ──────────────────────
   "Thoracic Foam Roller": {
-    metricType:"hold", holdSeconds:90, perSide:false, sec:90,
+    region:"upper", metricType:"flow", holdSeconds:90, perSide:false, sec:90, eq:["foamroller"],
     setup:    "Roller across your upper back at the shoulder-blade line, knees bent, hips down, hands cradling your head.",
     movement: "Work through the mid-back (T4–T8) in short segments, letting your upper back drape backward over the roller.",
     feel:     "A gentle extension and release in the muscles either side of the upper spine — never a pinch on the spine itself.",
     mistake:  "Rolling too low onto the lower back — stop at the bottom of the ribs; the lumbar spine should never bend over the roller.",
   },
+  "Foam Roller Chest Opener": {
+    region:"upper", metricType:"hold", holdSeconds:90, perSide:false, sec:90, eq:["foamroller"],
+    setup:    "Lie lengthwise ALONG the roller — it runs head to tailbone down your spine. Knees bent, feet flat, head supported.",
+    movement: "Let both arms fall open to the sides at shoulder height, palms up, and simply breathe. Let gravity do the work.",
+    feel:     "A slow, broad opening across the front of the chest as the shoulders sink toward the floor either side of the roller.",
+    mistake:  "Forcing the arms down or holding them out — let them hang heavy; if the shoulders complain, lower the arms toward the hips.",
+  },
+  "Bench Thoracic Extension": {
+    region:"upper", metricType:"hold", holdSeconds:60, perSide:false, sec:60, eq:["bench"],
+    setup:    "Kneel facing a bench or chair, elbows on the surface shoulder-width apart, hips stacked over the knees.",
+    movement: "Sit the hips back toward the heels and let the chest sink toward the floor between the arms. Hold and breathe.",
+    feel:     "A long extension through the upper back and armpits, opening the mid-spine — no pinch in the lower back.",
+    mistake:  "Letting the lower back sag to reach further — keep the ribs knitted down so the motion stays in the thoracic spine.",
+  },
   "Doorway Chest Stretch": {
-    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    region:"upper", metricType:"hold", holdSeconds:60, perSide:true, sec:60, eq:["doorway"],
     setup:    "Stand in a doorway, forearm on the frame, elbow bent to 90° at about shoulder height, one foot staggered forward.",
     movement: "Shift your weight gently through the front foot until the chest opens. Hold, then switch sides.",
     feel:     "A broad stretch across the front of the chest and shoulder — not in the neck or deep in the shoulder joint.",
     mistake:  "Placing the elbow too high or shrugging — this pinches the shoulder and sends tension to the neck instead of the pec.",
   },
+  "Band Pull-Apart": {
+    region:"upper", metricType:"reps", sets:2, reps:15, perSide:false, sec:45, eq:["bands"],
+    setup:    "Stand tall holding a light band at shoulder height, arms straight out in front, hands about shoulder-width apart.",
+    movement: "Pull the band apart by driving the hands out and back until it touches the chest, squeezing the shoulder blades. Return slowly.",
+    feel:     "Work between and behind the shoulder blades — rear delts and mid-traps doing the pulling, not the arms.",
+    mistake:  "Shrugging toward the ears or arching the lower back to finish the rep — keep the shoulders down and the ribs stacked.",
+  },
+  "Prone Y-T-W": {
+    region:"upper", metricType:"reps", sets:3, reps:8, perSide:false, sec:45, eq:["mat"],
+    setup:    "Lie face down, forehead resting on a towel, arms out and thumbs pointing up toward the ceiling.",
+    movement: "Do 8 reps in each of three arm positions — Y (overhead), T (straight out), W (elbows bent and tucked). Lift the arms just off the floor and lower slowly.",
+    feel:     "A burn low between the shoulder blades — the lower traps and rear delts, not the upper traps or lower back.",
+    mistake:  "Lifting high by arching the lower back and hoisting with the neck — the arms only need to clear the floor.",
+  },
   "Wall Angel": {
-    metricType:"reps", sets:2, reps:8, perSide:false, sec:80,
-    setup:    "Back against a wall, lower back flat, ribs down, arms bent in a 'goalpost' with the backs of the hands on the wall.",
+    region:"upper", metricType:"reps", sets:2, reps:8, perSide:false, sec:80, eq:["bodyweight"],
+    setup:    "Back against a wall, lower back flat, ribs down, arms bent in a goalpost with the backs of the hands on the wall.",
     movement: "Slowly slide the arms up overhead and back down, keeping hands and wrists in contact with the wall the whole way.",
     feel:     "Work between the shoulder blades and in the lower traps — a controlled effort, not a stretch.",
     mistake:  "Letting the lower back arch off the wall or the hands peel away to reach higher — only go as far as contact holds.",
   },
   "Chin Tuck": {
-    metricType:"repsHold", reps:10, holdSeconds:5, perSide:false, sec:60,
+    region:"upper", metricType:"repsHold", reps:10, holdSeconds:5, perSide:false, sec:60, eq:["bodyweight"],
     setup:    "Sit or stand tall, shoulders relaxed, eyes level and facing straight ahead.",
-    movement: "Draw the chin straight back (making a 'double chin'), hold briefly, then release. Repeat for the prescribed reps.",
+    movement: "Draw the chin straight back, making a double chin, hold briefly, then release. Repeat for the prescribed reps.",
     feel:     "A lengthening at the base of the skull and top of the neck, with a light effort at the front of the throat.",
     mistake:  "Tipping the chin down toward the chest instead of gliding it straight back — that flexes the neck rather than retracting it.",
   },
+  "Upper Trap Stretch": {
+    region:"upper", metricType:"hold", holdSeconds:45, perSide:true, sec:45, eq:["bodyweight"],
+    setup:    "Sit tall and anchor one hand under your thigh or the seat edge to hold that shoulder down.",
+    movement: "Tip the opposite ear toward the opposite shoulder, adding light hand pressure on the side of the head. Hold, then switch.",
+    feel:     "A long stretch down the side of the neck into the top of the shoulder of the anchored side.",
+    mistake:  "Pulling hard, or letting the anchored shoulder creep up — the shoulder staying down IS the stretch; the hand only guides.",
+  },
+  "Levator Scapulae Stretch": {
+    region:"upper", metricType:"hold", holdSeconds:45, perSide:true, sec:45, eq:["bodyweight"],
+    setup:    "Sit tall, anchor one hand under the seat, and turn your head about 45° away from that side, as if looking at your opposite pocket.",
+    movement: "Take the nose down toward the armpit, then apply light pressure to the back of the head. Hold, then switch sides.",
+    feel:     "A stretch deeper and further back in the neck than the upper-trap version — from the skull toward the shoulder blade.",
+    mistake:  "Rotating the whole torso instead of just the head, which unloads the muscle you are trying to reach.",
+  },
   "Thread the Needle": {
-    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    region:"upper", metricType:"hold", holdSeconds:60, perSide:true, sec:60, eq:["mat"],
     setup:    "On all fours, wrists under shoulders, knees under hips, back flat.",
     movement: "Reach one arm underneath the body and across, lowering that shoulder toward the floor, then return. Rotate through the upper back only.",
     feel:     "A rotational stretch across the upper back and the rear of the shoulder of the threading arm.",
     mistake:  "Letting the hips twist to force more range — keep them square and level so the motion stays in the thoracic spine.",
   },
+  "Open Book": {
+    region:"upper", metricType:"repsHold", reps:8, holdSeconds:3, perSide:true, sec:50, eq:["mat"],
+    setup:    "Lie on your side, knees stacked and bent to 90° on a cushion, both arms straight out in front at shoulder height.",
+    movement: "Keeping the knees pinned together, sweep the top arm up and over to the far side, following the hand with your eyes. Return slowly, then switch sides.",
+    feel:     "A rotation opening across the chest and mid-back — the knees staying down is what keeps it in the thoracic spine.",
+    mistake:  "Letting the top knee lift off the bottom one — the moment the pelvis rolls, the lumbar spine takes the twist instead.",
+  },
   "Lat Doorway Stretch": {
-    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    region:"upper", metricType:"hold", holdSeconds:60, perSide:true, sec:60, eq:["doorway"],
     setup:    "Grip a doorframe or upright at about head height, feet back so the arm is straight and taking some weight.",
     movement: "Sit the hips back and away from the anchor, adding a slight side-bend, until the side of the back lengthens.",
     feel:     "A long stretch down the side of the back and under the armpit — the lat, from armpit toward hip.",
     mistake:  "Shrugging the shoulder up to the ear instead of reaching long — let the shoulder blade glide and keep the arm relaxed.",
   },
-  "Hip Flexor Lunge": {
-    metricType:"hold", holdSeconds:90, perSide:true, sec:90,
-    setup:    "Half-kneeling: back knee on the floor, front foot flat ahead, torso tall and stacked over the hips.",
-    movement: "First tuck the pelvis under (squeeze the back-leg glute, flatten the low back), THEN shift gently forward. Hold, switch sides.",
-    feel:     "A stretch across the front of the hip and top of the thigh of the back (kneeling) leg.",
-    mistake:  "Leaning forward before tucking the pelvis — this arches the lower back and loads the disc instead of stretching the hip flexor.",
-  },
-  "Figure-4 Piriformis": {
-    metricType:"hold", holdSeconds:60, perSide:true, sets:3, sec:60,
-    setup:    "Lie on your back, both knees bent, and cross one ankle over the opposite thigh to make a 'figure 4'.",
-    movement: "Reach through and gently draw the supporting thigh toward the chest until you feel the stretch. Hold, then switch sides.",
-    feel:     "A deep stretch in the glute and outer hip of the crossed leg.",
-    mistake:  "Yanking or bouncing the leg — pull slowly and keep the lower back flat on the floor rather than curling off it.",
-  },
+
+  // ── Lower back · lumbar disc · deep core ────────────────────────────────────
   "Cat-Cow Flow": {
-    metricType:"hold", holdSeconds:90, perSide:false, sec:90,
+    region:"lower", metricType:"flow", holdSeconds:90, perSide:false, sec:90, eq:["mat"],
     setup:    "On all fours, wrists under shoulders, knees under hips, spine in neutral.",
     movement: "Exhale and round the spine up toward the ceiling, then inhale and let it sink into a gentle arch. Move slowly and continuously.",
     feel:     "A gentle wave of mobility travelling along the whole spine, easing the mid and lower back.",
     mistake:  "Forcing the end range or moving fast — stay slow and stop the instant the lower back feels any pinch.",
   },
-  "Prone Extension (McKenzie)": {
-    metricType:"repsHold", reps:10, holdSeconds:2, sets:3, perSide:false, sec:30,
-    setup:    "Lie face down, hands flat under the shoulders as if to push up, hips and legs relaxed.",
-    movement: "Slowly press the upper body up, letting hips and belly stay heavy on the floor. Hold briefly at the top, then lower with control.",
-    feel:     "A gentle extension through the lower back as it arches — mild, never sharp.",
-    mistake:  "Tensing the glutes and hips while pressing up — keep the lower body soft. STOP if it sends tingling or pain below the knee.",
+  "Lower Trunk Rotation": {
+    region:"lower", metricType:"flow", holdSeconds:60, perSide:false, sec:60, eq:["mat"],
+    setup:    "Lie on your back, knees bent and together, feet flat, arms out to the sides for stability.",
+    movement: "Let the knees drift slowly a short way to one side, then back through centre to the other. Small, easy arcs — no forcing to the floor.",
+    feel:     "A gentle unwinding across the lower back and into the hips, easing side to side.",
+    mistake:  "Dropping the knees all the way down for a bigger twist — a loaded end-range rotation is exactly what an irritable disc dislikes.",
   },
   "Knee to Chest": {
-    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    region:"lower", metricType:"hold", holdSeconds:60, perSide:true, sec:60, eq:["mat"],
     setup:    "Lie on your back, one leg straight along the floor, the other knee bent.",
     movement: "Gently draw the bent knee toward the chest with your hands until you feel a mild pull, hold, then switch sides.",
     feel:     "A gentle stretch and release across the lower back and into the glute of the bent leg.",
     mistake:  "Letting the straight leg bend up off the floor — keep it long so the lower back gets the gentle traction.",
   },
+  "Prone Extension (McKenzie)": {
+    region:"lower", metricType:"repsHold", reps:10, holdSeconds:2, sets:3, perSide:false, sec:30, eq:["mat"],
+    setup:    "Lie face down, hands flat under the shoulders as if to push up, hips and legs relaxed.",
+    movement: "Slowly press the upper body up, letting hips and belly stay heavy on the floor. Hold briefly at the top, then lower with control.",
+    feel:     "A gentle extension through the lower back as it arches — mild, never sharp.",
+    mistake:  "Tensing the glutes and hips while pressing up — keep the lower body soft. STOP if it sends tingling or pain below the knee.",
+  },
+  "Sphinx Hold": {
+    region:"lower", metricType:"hold", holdSeconds:60, perSide:false, sec:60, eq:["mat"],
+    setup:    "Lie face down and prop yourself on your forearms, elbows directly under the shoulders, legs long and relaxed.",
+    movement: "Rest there and breathe, letting the belly and hips stay heavy on the floor while the lower back settles into a gentle arch.",
+    feel:     "A mild, sustained extension low in the back — this is the resting-in version of the McKenzie press-up.",
+    mistake:  "Holding tension through the glutes and shoulders — if the position stings rather than eases, lower onto your belly and stop.",
+  },
+  "Standing Back Extension": {
+    region:"lower", metricType:"repsHold", reps:10, holdSeconds:2, perSide:false, sec:45, eq:["bodyweight"],
+    setup:    "Stand with feet hip-width, hands on the back of the hips, fingers pointing down.",
+    movement: "Lean back over the hands, letting the extension come from the lower back, then return to tall. Repeat smoothly.",
+    feel:     "The same gentle extension as the floor press-up, but usable anywhere — a mid-day reset for a desk-stiffened back.",
+    mistake:  "Bending the knees or leaning from the upper back only — keep the legs straight so the movement reaches the lumbar spine.",
+  },
+  "Dead Bug": {
+    region:"lower", metricType:"reps", sets:2, reps:10, perSide:false, sec:60, eq:["mat"],
+    setup:    "Lie on your back, arms straight up over the shoulders, hips and knees bent to 90°. Flatten the lower back into the floor.",
+    movement: "Slowly extend one arm overhead and the opposite leg out long, then return. Alternate sides; each pair counts as one rep.",
+    feel:     "A deep brace low in the abdomen holding the ribs and pelvis still while the limbs move.",
+    mistake:  "Letting the lower back peel off the floor as the leg extends — shorten the reach; the flat back is the whole point.",
+  },
+  "Bird Dog": {
+    region:"lower", metricType:"repsHold", reps:8, holdSeconds:5, perSide:true, sec:60, eq:["mat"],
+    setup:    "On all fours, wrists under shoulders, knees under hips, spine neutral and ribs down.",
+    movement: "Extend one arm forward and the opposite leg back until both are level with the torso. Hold, return, and repeat. Then switch sides.",
+    feel:     "The whole trunk working to stay square and still — a stability effort, not a stretch.",
+    mistake:  "Lifting the leg above hip height and arching the back, or letting a hip drop — stay long and level, as if balancing a glass on the low back.",
+  },
+  "Side Plank (Modified)": {
+    region:"lower", metricType:"hold", holdSeconds:30, perSide:true, sets:2, sec:30, eq:["mat"],
+    setup:    "Lie on your side propped on the forearm, elbow under the shoulder, knees bent to 90° and stacked.",
+    movement: "Lift the hips so the body makes a straight line from knee to shoulder. Hold, lower with control, then switch sides.",
+    feel:     "A strong brace down the underside of the trunk, from the ribs into the hip.",
+    mistake:  "Letting the hips sag or roll forward — this is a lateral-chain hold for the spine, so keep the chest square to the wall.",
+  },
+
+  // ── Hips · legs · ankles ────────────────────────────────────────────────────
+  "Hip Flexor Lunge": {
+    region:"hips", metricType:"hold", holdSeconds:90, perSide:true, sec:90, eq:["mat"],
+    setup:    "Half-kneeling: back knee on the floor and padded, front foot flat ahead, torso tall and stacked over the hips.",
+    movement: "First tuck the pelvis under (squeeze the back-leg glute, flatten the low back), THEN shift gently forward. Hold, switch sides.",
+    feel:     "A stretch across the front of the hip and top of the thigh of the back (kneeling) leg.",
+    mistake:  "Leaning forward before tucking the pelvis — this arches the lower back and loads the disc instead of stretching the hip flexor.",
+  },
+  "Figure-4 Piriformis": {
+    region:"hips", metricType:"hold", holdSeconds:60, perSide:true, sec:60, eq:["mat"],
+    setup:    "Lie on your back, both knees bent, and cross one ankle over the opposite thigh to make a figure 4.",
+    movement: "Reach through and gently draw the supporting thigh toward the chest until you feel the stretch. Hold, then switch sides.",
+    feel:     "A deep stretch in the glute and outer hip of the crossed leg.",
+    mistake:  "Yanking or bouncing the leg — pull slowly and keep the lower back flat on the floor rather than curling off it.",
+  },
+  "90/90 Hip Rotation": {
+    region:"hips", metricType:"flow", holdSeconds:90, perSide:false, sec:90, eq:["mat"],
+    setup:    "Sit on the floor with one leg bent in front at 90° and the other bent out to the side at 90°, both shins on the floor.",
+    movement: "Keeping the chest tall, sweep both knees over to the other side so the positions swap. Move slowly and continuously.",
+    feel:     "Rotation deep inside both hip sockets — one opening outward while the other turns inward.",
+    mistake:  "Rounding the back to get the knees down — sit up on a cushion instead and let the hips, not the spine, take the motion.",
+  },
+  "Adductor Rock Back": {
+    region:"hips", metricType:"flow", holdSeconds:60, perSide:true, sec:60, eq:["mat"],
+    setup:    "On all fours, extend one leg straight out to the side with the foot flat and toes pointing forward.",
+    movement: "Rock the hips slowly back toward the heel of the kneeling leg, then forward again. Repeat, then switch sides.",
+    feel:     "A stretch along the inner thigh of the straight leg, deepening as the hips travel back.",
+    mistake:  "Letting the back round as you rock back — keep the spine long and shorten the range instead.",
+  },
   "Supine Hamstring Stretch": {
-    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    region:"hips", metricType:"hold", holdSeconds:60, perSide:true, sec:60, eq:["mat","strap"],
     setup:    "Lie on your back, loop a towel or strap around the arch of one foot, other leg bent or straight on the floor.",
     movement: "Straighten the looped leg up toward the ceiling using the towel until the back of the thigh lengthens. Hold, switch sides.",
     feel:     "A stretch down the back of the thigh — from behind the knee up toward the sit bone.",
     mistake:  "Rounding the lower back off the floor to reach further — keep it flat; never substitute a seated toe-touch, which loads the disc.",
   },
-  "Glute Bridge Hold": {
-    metricType:"hold", holdSeconds:60, perSide:false, sec:60,
-    setup:    "Lie on your back, knees bent, feet flat and hip-width, arms resting at your sides.",
-    movement: "Press through the heels and lift the hips into a straight line from knees to shoulders. Squeeze the glutes and hold.",
-    feel:     "A strong contraction in the glutes and hamstrings — this is activation work, not a stretch.",
-    mistake:  "Arching the lower back to lift higher instead of driving with the glutes — ribs down, stop at a straight hip line.",
-  },
   "Standing Quad Stretch": {
-    metricType:"hold", holdSeconds:60, perSide:true, sec:60,
+    region:"hips", metricType:"hold", holdSeconds:60, perSide:true, sec:60, eq:["bodyweight"],
     setup:    "Stand tall near a wall for balance, weight on one leg.",
     movement: "Bend the other knee and hold the ankle, drawing the heel toward the glute while keeping the knees together. Hold, switch sides.",
     feel:     "A stretch along the front of the thigh — the quad of the bent leg.",
     mistake:  "Letting the knee drift forward or the low back arch to pull harder — keep the knees aligned and the pelvis tucked slightly.",
   },
+  "Glute Bridge Hold": {
+    region:"hips", metricType:"hold", holdSeconds:45, perSide:false, sets:3, sec:45, eq:["mat"],
+    setup:    "Lie on your back, knees bent, feet flat and hip-width, arms resting at your sides.",
+    movement: "Press through the heels and lift the hips into a straight line from knees to shoulders. Squeeze the glutes and hold, lowering between sets.",
+    feel:     "A strong contraction in the glutes and hamstrings — this is activation work, not a stretch.",
+    mistake:  "Arching the lower back to lift higher instead of driving with the glutes — ribs down, stop at a straight hip line.",
+  },
+  "Calf Wall Stretch": {
+    region:"hips", metricType:"hold", holdSeconds:45, perSide:true, sec:45, eq:["bodyweight"],
+    setup:    "Hands on a wall, one foot back with the leg straight, both feet pointing straight at the wall, back heel down.",
+    movement: "Lean into the wall by bending the front knee until the back calf lengthens. Hold, then switch sides.",
+    feel:     "A stretch through the thick upper part of the back calf, from behind the knee down.",
+    mistake:  "Letting the back heel lift or the foot turn out — heel down and toes forward, or the stretch goes to the arch instead.",
+  },
+  "Knee-to-Wall Ankle": {
+    region:"hips", metricType:"repsHold", reps:10, holdSeconds:3, perSide:true, sec:45, eq:["bodyweight"],
+    setup:    "Stand facing a wall with the toes of one foot a hand-span back from it, hands on the wall for balance.",
+    movement: "Drive that knee forward over the toes to touch the wall, keeping the heel glued down. Return and repeat, then switch sides.",
+    feel:     "A deep, pinch-free stretch at the front of the ankle and through the lower calf.",
+    mistake:  "Letting the heel peel up or the knee collapse inward — move the foot closer to the wall instead and keep the knee tracking over the toes.",
+  },
 };
 
+const REGION_LABEL = { upper:"Upper Back", lower:"Lower Back", hips:"Hips & Legs" };
+
+// The three focused routines are DISJOINT — no exercise appears in more than one —
+// so switching focus never repeats work. full_body is deliberately a cross-section
+// of all three regions and does overlap; validate-stretch.mjs enforces both rules.
 const STRETCH_ROUTINES = {
   upper_back: {
     label: "Upper Back",
-    desc:  "Thoracic extension · pec opener · chin tuck · postural reset",
+    desc:  "Thoracic extension · pec opener · scapular strength · postural reset",
     color: "var(--amber)",
-    afterDay: ["Push","Full Body","Full Body A","Upper A","Upper B","Chest","Shoulders","Arms"],
-    // Foam roller first (mobilises) → pec opener → active wall angel → chin tuck → rotation → lats last
-    items: ["Thoracic Foam Roller","Doorway Chest Stretch","Wall Angel","Chin Tuck","Thread the Needle","Lat Doorway Stretch"],
+    afterDay: ["Push","Chest","Shoulders","Arms","Upper","Upper A","Upper B","Full Body A"],
+    // Roller mobilises → pec opener → band + wall activation → neck → rotation → lats last
+    items: ["Thoracic Foam Roller","Doorway Chest Stretch","Band Pull-Apart","Wall Angel","Chin Tuck","Thread the Needle","Lat Doorway Stretch"],
   },
   lower_back: {
     label: "Lower Back",
-    desc:  "Disc decompression · hip flexor · piriformis · McKenzie",
+    desc:  "Disc decompression · McKenzie extension · deep-core stability",
     color: "var(--blue)",
-    afterDay: ["Legs","Pull","Full Body B","Lower A","Lower B","Back"],
-    // Hip flexor first (APT is most critical for disc) → piriformis → cat-cow → McKenzie → knee-to-chest decompress
-    items: ["Hip Flexor Lunge","Figure-4 Piriformis","Cat-Cow Flow","Prone Extension (McKenzie)","Knee to Chest"],
+    afterDay: ["Pull","Back","Lower B","Full Body B"],
+    // Gentle mobility → decompress → extension bias → core stability last. The one
+    // flexion item sits BEFORE the McKenzie press-ups so it never undoes them.
+    items: ["Cat-Cow Flow","Lower Trunk Rotation","Knee to Chest","Prone Extension (McKenzie)","Dead Bug","Bird Dog"],
   },
   hips_legs: {
     label: "Hips & Legs",
-    desc:  "Hip flexors · hamstrings (spine-safe) · glute activation",
+    desc:  "Hip flexors · rotators · hamstrings (spine-safe) · glute activation",
     color: "var(--green)",
-    afterDay: ["Legs","Full Body B","Lower A","Lower B"],
-    items: ["Hip Flexor Lunge","Figure-4 Piriformis","Supine Hamstring Stretch","Glute Bridge Hold","Standing Quad Stretch"],
+    afterDay: ["Legs","Lower A","Full Body"],
+    // Hip flexor first (anterior tilt drives lumbar load) → rotators → posterior chain → activation
+    items: ["Hip Flexor Lunge","Figure-4 Piriformis","90/90 Hip Rotation","Supine Hamstring Stretch","Standing Quad Stretch","Glute Bridge Hold"],
   },
   full_body: {
     label: "Full Body",
-    desc:  "Complete postural + disc reset — upper & lower back",
+    desc:  "Complete postural + disc reset — upper back, lumbar spine and hips",
     color: "var(--purple)",
     afterDay: [],
-    items: ["Thoracic Foam Roller","Doorway Chest Stretch","Chin Tuck","Wall Angel","Thread the Needle","Hip Flexor Lunge","Figure-4 Piriformis","Cat-Cow Flow","Prone Extension (McKenzie)","Supine Hamstring Stretch","Lat Doorway Stretch"],
+    // Standing and upper work first, then everything on the floor, to minimise up-downs.
+    items: ["Thoracic Foam Roller","Doorway Chest Stretch","Band Pull-Apart","Wall Angel","Thread the Needle","Cat-Cow Flow","Prone Extension (McKenzie)","Bird Dog","Hip Flexor Lunge","Figure-4 Piriformis"],
   },
 };
 
@@ -2335,22 +2471,27 @@ function AiAnalysisPanel({ loading, raw, onGoToChat, day, proposalState }) {
 }
 
 // ── Stretch helpers ───────────────────────────────────────────────────────────
-function getStretchAlternatives(itemName, focus) {
-  const seen = new Set([itemName]);
-  const result = [];
-  const primary = STRETCH_ROUTINES[focus];
-  if (primary) {
-    for (const name of primary.items) {
-      if (!seen.has(name)) { seen.add(name); result.push({ name, ...EXERCISES[name], fromRoutine: primary.label }); }
-    }
-  }
-  for (const [key, r] of Object.entries(STRETCH_ROUTINES)) {
-    if (key === focus) continue;
-    for (const name of r.items) {
-      if (!seen.has(name)) { seen.add(name); result.push({ name, ...EXERCISES[name], fromRoutine: r.label }); }
-    }
-  }
-  return result.slice(0, 6);
+// Alternatives are ranked so the list never leads with work already in today's
+// session: same region and unused first, then other regions unused, and only as
+// a last resort something already scheduled (flagged so it reads honestly).
+function getStretchAlternatives(itemName, focus, sessionNames = []) {
+  const inSession = new Set(sessionNames);
+  const region = (EXERCISES[itemName] || {}).region;
+  const taken = new Set([itemName]);
+  const out = [];
+  const add = name => {
+    if (taken.has(name) || !EXERCISES[name]) return;
+    taken.add(name);
+    const ex = EXERCISES[name];
+    out.push({ name, ...ex,
+      fromRoutine: REGION_LABEL[ex.region] || "Library",
+      alreadyInSession: inSession.has(name) });
+  };
+  const all = Object.keys(EXERCISES);
+  all.filter(n => EXERCISES[n].region === region && !inSession.has(n)).forEach(add);
+  all.filter(n => !inSession.has(n)).forEach(add);
+  all.forEach(add); // last resort
+  return out.slice(0, 6);
 }
 
 // Header label + primary value derived from an exercise's metricType.
@@ -2359,20 +2500,22 @@ function metricHeader(ex) {
     return { label:"SETS × REPS", value:`${ex.sets} × ${ex.reps}` };
   if (ex.metricType === "repsHold")
     return { label:"REPS × HOLD", value:`${ex.reps} × ${ex.holdSeconds}s` };
+  if (ex.metricType === "flow")
+    return { label:"DURATION", value:`${ex.holdSeconds}s` }; // continuous motion, not a hold
   return { label:"HOLD TIME", value:`${ex.holdSeconds}s` }; // "hold"
 }
 
-function StretchCard({ item, exNum, totalEx, focus }) {
+function StretchCard({ item, exNum, totalEx, focus, isSwapped, sessionNames, onSwap }) {
   const [showAlts, setShowAlts] = useState(false);
-  const [swappedTo, setSwappedTo] = useState(null);
-  const active = swappedTo || item;
+  const active = item;
 
   const metric = metricHeader(active);
 
-  const alts = getStretchAlternatives(active.name, focus);
+  // Session-aware: everything else on today's list is de-prioritised in the list.
+  const alts = getStretchAlternatives(active.name, focus, sessionNames);
 
   const doSwap = alt => {
-    setSwappedTo({ ...alt });
+    onSwap(alt);
     setShowAlts(false);
   };
 
@@ -2386,7 +2529,7 @@ function StretchCard({ item, exNum, totalEx, focus }) {
         <div style={{ flex:1 }}>
           <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:17, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
             {active.name}
-            {swappedTo && <span style={S.tag("var(--blue)")}>swapped</span>}
+            {isSwapped && <span style={S.tag("var(--blue)")}>swapped</span>}
           </div>
           <div style={{ display:"flex", gap:4, marginTop:4, flexWrap:"wrap" }}>
             {active.perSide && <span style={S.tag("var(--purple)")}>each side</span>}
@@ -2428,7 +2571,7 @@ function StretchCard({ item, exNum, totalEx, focus }) {
         <button
           style={{ ...S.btnSm, width:"100%", textAlign:"left", display:"flex", justifyContent:"space-between" }}
           onClick={() => setShowAlts(a => !a)}>
-          <span>🔄 {swappedTo ? "Swap again" : "Swap exercise"}</span>
+          <span>🔄 {isSwapped ? "Swap again" : "Swap exercise"}</span>
           <span style={{ color:"var(--green)" }}>{showAlts ? "▲" : "▼"}</span>
         </button>
         {showAlts && (
@@ -2438,7 +2581,10 @@ function StretchCard({ item, exNum, totalEx, focus }) {
                 style={{ ...S.card, padding:"10px 12px", marginBottom:6, display:"flex", alignItems:"center", gap:10, cursor:"pointer", border:"1px solid var(--border)" }}
                 onClick={() => doSwap(a)}>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14 }}>{a.name}</div>
+                  <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                    {a.name}
+                    {a.alreadyInSession && <span style={S.tag("var(--amber)")}>already today</span>}
+                  </div>
                   <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)" }}>
                     {a.fromRoutine}{a.perSide ? " · each side" : ""}{a.metricType !== "reps" && (a.sets||1)>1 ? ` · ×${a.sets} sets` : ""}
                   </div>
@@ -2462,7 +2608,14 @@ function StretchSession({ data, setData, onBack }) {
   const [finished, setFinished] = useState(false);
 
   const routine = STRETCH_ROUTINES[focus];
-  const items = getStretchItems(focus, minutes);
+  const baseItems = getStretchItems(focus, minutes);
+
+  // Swaps live here, not in the card, so every card knows what else is on today's
+  // list and can rank its suggestions against it.
+  const [swaps, setSwaps] = useState({});
+  useEffect(() => { setSwaps({}); }, [focus]);
+  const items = baseItems.map((it, i) => swaps[i] || it);
+  const sessionNames = items.map(it => it.name);
 
   const logSession = () => {
     const entry = { date:new Date().toISOString().slice(0,10), day:"Stretch", volume:0, focus, duration:minutes, log:{} };
@@ -2516,11 +2669,14 @@ function StretchSession({ data, setData, onBack }) {
       <div style={S.h2}>Routine · ~{minutes} min</div>
       {items.map((item, i) => (
         <StretchCard
-          key={`${focus}_${item.name}_${i}`}
+          key={`${focus}_${i}`}
           item={item}
           exNum={i + 1}
           totalEx={items.length}
           focus={focus}
+          isSwapped={!!swaps[i]}
+          sessionNames={sessionNames}
+          onSwap={alt => setSwaps(sw => ({ ...sw, [i]: alt }))}
         />
       ))}
 
