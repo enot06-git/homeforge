@@ -201,6 +201,7 @@ const EXERCISE_DB = {
     { name:"Dumbbell Row",          eq:["dumbbells"],                   muscle:"Back",            unilateral:true  },
     { name:"Dumbbell Curl",         eq:["dumbbells"],                   muscle:"Biceps",          unilateral:true  },
     { name:"Band Pull-Apart",       eq:["bands"],                       muscle:"Rear Delt",       unilateral:false },
+    { name:"Face Pull",             eq:["bands"],                  muscle:"Rear Delt/Upper Back", unilateral:false },
     { name:"Barbell Row",           eq:["barbell"],                     muscle:"Back",            unilateral:false },
     { name:"EZ Bar Curl",           eq:["ezbar"],                       muscle:"Biceps",          unilateral:false },
     { name:"EZ Bar Reverse Curl",   eq:["ezbar"],                       muscle:"Biceps/Forearms", unilateral:false },
@@ -420,7 +421,10 @@ const DAY_TEMPLATES = {
     { name:"Barbell Deadlift",       alts:["Romanian Deadlift","Single-Leg RDL"],        eq:["barbell"] },
     { name:"Assisted Pull-Up",       alts:["Pull-Up","Weighted Pull-Up","Inverted Row"],          eq:["pullupbar"] },
     { name:"Dumbbell Row",           alts:["Inverted Row"],                              eq:["dumbbells"] },
-    { name:"Band Pull-Apart",        alts:["EZ Bar Upright Row","EZ Bar Reverse Curl"], eq:["bands"] },
+    // Second horizontal row: the split ran 3 chest movements against 1 row, which
+    // is the wrong balance when upper-back kyphosis is the thing being managed.
+    { name:"Barbell Row",            alts:["Dumbbell Row","Inverted Row"],               eq:["barbell"] },
+    { name:"Face Pull",              alts:["Band Pull-Apart","EZ Bar Reverse Curl"],     eq:["bands"] },
     { name:"EZ Bar Curl",            alts:["Dumbbell Curl","Chin-Up"],                  eq:["ezbar"] },
   ],
   "Legs": [
@@ -570,12 +574,16 @@ const EXERCISES = {
     feel:     "A long extension through the upper back and armpits, opening the mid-spine — no pinch in the lower back.",
     mistake:  "Letting the lower back sag to reach further — keep the ribs knitted down so the motion stays in the thoracic spine.",
   },
+  // Three elbow heights, not one: the pec fibres run in different directions, and
+  // the low position is the only one that reaches pec minor — the muscle that
+  // actually tips the shoulder blade forward. 3 x 20s keeps the 60s per side
+  // that the hold-time evidence calls for, spread across the fibre directions.
   "Doorway Chest Stretch": {
-    region:"upper", metricType:"hold", holdSeconds:60, perSide:true, sec:60, eq:["doorway"],
-    setup:    "Stand in a doorway, forearm on the frame, elbow bent to 90° at about shoulder height, one foot staggered forward.",
-    movement: "Shift your weight gently through the front foot until the chest opens. Hold, then switch sides.",
-    feel:     "A broad stretch across the front of the chest and shoulder — not in the neck or deep in the shoulder joint.",
-    mistake:  "Placing the elbow too high or shrugging — this pinches the shoulder and sends tension to the neck instead of the pec.",
+    region:"upper", metricType:"hold", holdSeconds:20, perSide:true, sets:3, sec:20, eq:["doorway"],
+    setup:    "Stand in a doorway, forearm on the frame, one foot staggered forward. Set the elbow BELOW shoulder height for the first round.",
+    movement: "Shift weight gently through the front foot until the chest opens. Hold, switch sides, then repeat the pair with the elbow at shoulder height, and again above it.",
+    feel:     "A broad opening across the front of the chest — low elbow reaches deepest toward the shoulder blade, high elbow reaches the lower chest fibres.",
+    mistake:  "Doing all three rounds at the same height, or shrugging — vary the elbow, keep the shoulder down, and stop short of any pinch in the joint.",
   },
   "Band Pull-Apart": {
     region:"upper", metricType:"reps", sets:2, reps:15, perSide:false, sec:45, eq:["bands"],
@@ -583,6 +591,13 @@ const EXERCISES = {
     movement: "Pull the band apart by driving the hands out and back until it touches the chest, squeezing the shoulder blades. Return slowly.",
     feel:     "Work between and behind the shoulder blades — rear delts and mid-traps doing the pulling, not the arms.",
     mistake:  "Shrugging toward the ears or arching the lower back to finish the rep — keep the shoulders down and the ribs stacked.",
+  },
+  "Face Pull": {
+    region:"upper", metricType:"reps", sets:2, reps:15, perSide:false, sec:45, eq:["bands"],
+    setup:    "Anchor a band at about head height. Hold an end in each hand, palms facing in, arms straight, and step back until the band has tension.",
+    movement: "Pull the band toward your face, leading with the elbows high, finishing with the hands beside your ears and the shoulder blades squeezed. Return slowly.",
+    feel:     "Rear delts and the muscles between the shoulder blades, plus the small external rotators at the back of the shoulder.",
+    mistake:  "Letting the elbows drop below the hands, or shrugging into the neck — keep the upper arms level with the shoulders and the traps down.",
   },
   "Prone Y-T-W": {
     region:"upper", metricType:"reps", sets:3, reps:8, perSide:false, sec:45, eq:["mat"],
@@ -777,39 +792,46 @@ const REGION_LABEL = { upper:"Upper Back", lower:"Lower Back", hips:"Hips & Legs
 // The three focused routines are DISJOINT — no exercise appears in more than one —
 // so switching focus never repeats work. full_body is deliberately a cross-section
 // of all three regions and does overlap; validate-stretch.mjs enforces both rules.
+// ORDERING RULE: highest-impact work first, so a session cut short still gets the
+// exercises that actually change things. For kyphosis that means loaded scapular
+// and thoracic-extensor work ahead of mobility, and pec length work after both —
+// stretching the front alone moves the curve very little. Mobility drills that
+// used to open each routine now sit mid-list; the trade is deliberate.
 const STRETCH_ROUTINES = {
   upper_back: {
     label: "Upper Back",
-    desc:  "Thoracic extension · pec opener · scapular strength · postural reset",
+    desc:  "Scapular strength first · thoracic mobility · pec length last",
     color: "var(--amber)",
     afterDay: ["Push","Chest","Shoulders","Arms","Upper","Upper A","Upper B","Full Body A"],
-    // Roller mobilises → pec opener → band + wall activation → neck → rotation → lats last
-    items: ["Thoracic Foam Roller","Doorway Chest Stretch","Band Pull-Apart","Wall Angel","Chin Tuck","Thread the Needle","Lat Doorway Stretch"],
+    // 1-4 strength (the tier that holds a change) → 5 mobility → 6-7 length → 8 neck
+    items: ["Band Pull-Apart","Face Pull","Prone Y-T-W","Wall Angel","Thoracic Foam Roller","Doorway Chest Stretch","Lat Doorway Stretch","Chin Tuck"],
   },
   lower_back: {
     label: "Lower Back",
-    desc:  "Disc decompression · McKenzie extension · deep-core stability",
+    desc:  "McKenzie extension · deep-core stability · spinal mobility",
     color: "var(--blue)",
     afterDay: ["Pull","Back","Lower B","Full Body B"],
-    // Gentle mobility → decompress → extension bias → core stability last. The one
-    // flexion item sits BEFORE the McKenzie press-ups so it never undoes them.
-    items: ["Cat-Cow Flow","Lower Trunk Rotation","Knee to Chest","Prone Extension (McKenzie)","Dead Bug","Bird Dog"],
+    // Extension bias and deep core first — the two that matter for a disc — then
+    // mobility. Knee to Chest (the one flexion drill) is now a swap option only,
+    // so nothing in the routine works against the extension preference.
+    items: ["Prone Extension (McKenzie)","Dead Bug","Bird Dog","Sphinx Hold","Cat-Cow Flow","Lower Trunk Rotation"],
   },
   hips_legs: {
     label: "Hips & Legs",
-    desc:  "Hip flexors · rotators · hamstrings (spine-safe) · glute activation",
+    desc:  "Hip flexors · glute activation · rotators · posterior chain",
     color: "var(--green)",
     afterDay: ["Legs","Lower A","Full Body"],
-    // Hip flexor first (anterior tilt drives lumbar load) → rotators → posterior chain → activation
-    items: ["Hip Flexor Lunge","Figure-4 Piriformis","90/90 Hip Rotation","Supine Hamstring Stretch","Standing Quad Stretch","Glute Bridge Hold"],
+    // Hip flexor and glutes first: anterior pelvic tilt is the mechanical link
+    // between tight hip flexors, weak glutes and lumbar load.
+    items: ["Hip Flexor Lunge","Glute Bridge Hold","Figure-4 Piriformis","90/90 Hip Rotation","Supine Hamstring Stretch","Standing Quad Stretch"],
   },
   full_body: {
     label: "Full Body",
     desc:  "Complete postural + disc reset — upper back, lumbar spine and hips",
     color: "var(--purple)",
     afterDay: [],
-    // Standing and upper work first, then everything on the floor, to minimise up-downs.
-    items: ["Thoracic Foam Roller","Doorway Chest Stretch","Band Pull-Apart","Wall Angel","Thread the Needle","Cat-Cow Flow","Prone Extension (McKenzie)","Bird Dog","Hip Flexor Lunge","Figure-4 Piriformis"],
+    // Same rule across all three regions: the load-bearing work leads.
+    items: ["Band Pull-Apart","Face Pull","Wall Angel","Prone Extension (McKenzie)","Bird Dog","Hip Flexor Lunge","Thoracic Foam Roller","Doorway Chest Stretch","Cat-Cow Flow","Figure-4 Piriformis"],
   },
 };
 
@@ -3445,6 +3467,12 @@ const TECHNIQUE = {
     movement: "Pull the band apart to the chest, hold 1 second, then return slowly.",
     feel:     "Rear delts and mid-back squeezing as the shoulder blades retract.",
     mistake:  "Bending the elbows or shrugging — keep the arms straight and retract the shoulder blades fully.",
+  },
+  "Face Pull": {
+    setup:    "Band anchored at head height, an end in each hand, arms straight, stepped back so the band is taut.",
+    movement: "Pull toward your face with the elbows high, finishing hands beside the ears, then return slowly.",
+    feel:     "Rear delts, mid-back, and the external rotators at the back of the shoulder.",
+    mistake:  "Dropping the elbows below the hands or shrugging — keep the upper arms level with the shoulders.",
   },
   "Dumbbell Shoulder Press": {
     setup:    "Dumbbells at ear level, elbows at about 90°, core braced.",

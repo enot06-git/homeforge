@@ -19,7 +19,7 @@ const EXERCISE_DB_NAMES = [
   "Weighted Push-Up","Weighted Dip",
   // Pull
   "Pull-Up","Chin-Up","Neutral Grip Pull-Up","Weighted Pull-Up","Weighted Chin-Up",
-  "Inverted Row","Dumbbell Row","Dumbbell Curl","Band Pull-Apart","Barbell Row",
+  "Inverted Row","Dumbbell Row","Dumbbell Curl","Band Pull-Apart","Face Pull","Barbell Row",
   "EZ Bar Curl","EZ Bar Reverse Curl","EZ Bar Upright Row","Kettlebell Row",
   "Single-Arm Dumbbell Row",
   // Legs
@@ -38,7 +38,7 @@ const TECHNIQUE_KEYS = [
   "Push-Up","Diamond Push-Up","Pike Push-Up","Dumbbell Bench Press","Barbell Bench Press",
   "Dumbbell Fly","Weighted Dip","Tricep Dips","Overhead Press","Pull-Up","Chin-Up",
   "Neutral Grip Pull-Up","Weighted Pull-Up","Weighted Chin-Up","Inverted Row",
-  "Dumbbell Row","Single-Arm Dumbbell Row","Barbell Row","EZ Bar Curl","EZ Bar Reverse Curl",
+  "Dumbbell Row","Single-Arm Dumbbell Row","Barbell Row","Face Pull","EZ Bar Curl","EZ Bar Reverse Curl",
   "EZ Bar Skull Crusher","EZ Bar Upright Row","Close-Grip Bench Press","Barbell Squat",
   "Barbell Deadlift","Romanian Deadlift","Goblet Squat","Bulgarian Split Squat","Lunge",
   "Single-Leg RDL","Calf Raise","Squat","Plank","Dead Bug","Ab Wheel Rollout",
