@@ -104,7 +104,7 @@ of logic looks the way it does.
 |---|---|
 | 1.95 sessions/week against a 3/week plan; PPL is a 6-day split | Every muscle trained once per 10–12 days; every muscle group below MEV |
 | Horizontal pull:push ran **0.30:1** | Actively feeding the kyphosis |
-| Loaded hinge and loaded squat landed 2–3 days apart **9 times** | The main disc risk, and it came from the template, not from in-session choices |
+| Loaded hinge and loaded squat landed 2–3 days apart **9 times** (within 2 days, 3 times) | The main disc risk, and it came from the template, not from in-session choices |
 | Deadlift held 74kg×8 for **8 sessions**, squat 84kg×8 for 6 | The progression gate never opened (see below) |
 | Avg RIR drifted 2.0 → 1.45 across Jun–Jul; no voluntary deload in 22 weeks | Both training breaks were involuntary (10 days, then 18) |
 | Stretch module: **0 sessions logged out of 43** | A separate mobility day competes with the decision to train at all |
@@ -114,22 +114,27 @@ of logic looks the way it does.
 `SPLITS[3]` is the A/B/C rotation; `SPLITS[2]` is A/B. PPL day templates still
 exist and are reachable via `SPLITS[5]`, but are no longer the 3-day default.
 
-|  | A — squat | B — hinge | C — unilateral |
+|  | A — squat | B — unilateral | C — hinge |
 |---|---|---|---|
-| Lower | Barbell Squat | **Romanian Deadlift** | Bulgarian Split Squat |
-| H push | Bench Press | DB Bench Press | Weighted Dip |
-| H pull | Single-Arm DB Row | DB Row | Inverted Row |
-| Other | DB Shoulder Press | Assisted Pull-Up | DB Shoulder Press |
+| Lower | Barbell Squat | Bulgarian Split Squat | **Romanian Deadlift** |
+| H push | Bench Press | Weighted Dip | DB Bench Press |
+| H pull | Single-Arm DB Row | Inverted Row | DB Row |
+| Other | DB Shoulder Press | DB Shoulder Press | Assisted Pull-Up |
 | Rear delt | Face Pull | Face Pull | Face Pull |
-| Core | Dead Bug | EZ Bar Curl | Ab Wheel Rollout |
+| Core | Dead Bug | Ab Wheel Rollout | EZ Bar Curl |
 
 **Three rules hold across all three templates. Preserve them when editing:**
 1. **Horizontal pull ≥ horizontal push in every session.** One press, one row.
 2. **Face Pull in every session.** Rear delt work was 1.1 sets/week.
-3. **The loaded hinge appears in B only.** This is what removes the 2–3 day
-   hinge/squat collision structurally rather than by remembering to avoid it.
+3. **The loaded hinge appears in C only, and the ORDER matters.** B carries no
+   axial load, so it separates A's squat from C's hinge. Running the hinge in B
+   would put loaded-spine work 2 days after the squat every week once the athlete
+   actually trains 3x/week. A→B→C spaces them 4 and 3 days, which is the best
+   achievable with two loaded-spine sessions in a three-session week. **Do not
+   reorder the split array or move the hinge.**
 
-Measured on the rotation: pull:push **2.00:1**, loaded hinge **1 of 3 sessions**.
+Measured on the rotation: pull:push **2.00:1**, loaded hinge **1 of 3 sessions**,
+loaded-spine spacing on a Mon/Wed/Fri week **4, 3, 4, 3, 4 days** (min 3).
 
 It is a rotation, not a repeat — at 3 days/week every muscle is hit 3× but no
 exercise recurs within the week. At the real ~2 days/week it simply cycles
@@ -196,6 +201,9 @@ layoff.
   adherence vs planned, gap before this session, longest recent gap, RIR
   trajectory, share of sets at RIR ≤ 1, deload recency, horizontal push:pull
   ratio, loaded-spine spacing, mobility recency, per-muscle sets vs MEV
+- The loaded-spine flag fires at **2 days**, not 3: 3 days is the best achievable
+  at 3 sessions/week, so flagging it would cry wolf every week. `minSpineGap`
+  reports the actual closest spacing alongside it.
 - The system prompt ranks these **ahead of** load progression:
   adherence → fatigue → managed conditions → volume → load
 - Hard rule in the prompt: never recommend a weight increase in the same breath
@@ -205,7 +213,8 @@ layoff.
 ### Mobility tail ✅
 - Offered as a **6-minute tail on the finished screen**, not a separate day
 - `data.stretchStartMinutes` seeds the duration; a standalone stretch clears it
-- Routing: Full Body A → Upper Back, B → Lower Back, C → Hips & Legs
+- Routing: Full Body A → Upper Back, B → Hips & Legs, C → Lower Back (each
+  routine follows the session it best matches, so a 3-session week covers all three)
 - Stretch library: 31 exercises, region-tagged, written for the kyphosis and the
   disc, with setup/movement/feel/mistake cues and an evidence base in-source
 

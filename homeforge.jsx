@@ -190,8 +190,8 @@ const MUSCLE_MAP = {
   "Legs":["quads","hamstrings","glutes","calves"],
   "Full Body":["chest","back","quads","hamstrings"],
   "Full Body A":["chest","back","shoulders","quads","glutes"],
-  "Full Body B":["chest","back","biceps","hamstrings","glutes"],
-  "Full Body C":["chest","back","shoulders","triceps","quads"],
+  "Full Body B":["chest","back","shoulders","triceps","quads"],
+  "Full Body C":["chest","back","biceps","hamstrings","glutes"],
   "Upper A":["chest","back","shoulders","triceps","biceps"],
   "Upper B":["chest","back","shoulders"],"Lower A":["quads","hamstrings","glutes"],
   "Lower B":["quads","hamstrings","glutes"],"Chest":["chest","triceps"],
@@ -477,9 +477,11 @@ const DAY_TEMPLATES = {
   //      push sets/wk against 1.8 pull (0.30:1) while kyphosis was the thing
   //      being managed. One press, one row, no exceptions.
   //   2. Face Pull in every session. Rear delt was 1.1 sets/wk.
-  //   3. The loaded hinge appears in B only. Deadlift on Pull day and RDL on
-  //      Legs day landed 2-3 days apart nine times — the worst pattern in the
-  //      log for a lumbar disc. One hinge per rotation removes it structurally.
+  //   3. The loaded hinge appears in C only, and B (no axial load) sits between
+  //      A's squat and it. Deadlift on Pull day and RDL on Legs day landed 2-3
+  //      days apart nine times — the worst pattern in the log for a lumbar disc.
+  //      One hinge per rotation fixes the count; the A-B-C ORDER fixes the
+  //      spacing, which only matters once the athlete trains 3x/week.
   "Full Body A": [
     { name:"Barbell Squat",          alts:["Goblet Squat","Squat"],                     eq:["barbell","squatstands"] },
     { name:"Barbell Bench Press",    alts:["Dumbbell Bench Press","Push-Up"],           eq:["barbell","bench"] },
@@ -489,6 +491,20 @@ const DAY_TEMPLATES = {
     { name:"Dead Bug",               alts:["Plank"],                                    eq:["bodyweight","mat"] },
   ],
   "Full Body B": [
+    // Unilateral lower body, and deliberately the MIDDLE of the rotation: quad
+    // work with no bar on the back, so it separates A's squat from C's hinge.
+    // At 3 sessions/week, running the hinge here instead would put loaded-spine
+    // work 2 days after the squat every week — the same collision that showed up
+    // 9 times in the log. A -> B -> C spaces them 4 and 3 days, which is the best
+    // achievable with two loaded-spine sessions in a three-session week.
+    { name:"Bulgarian Split Squat",  alts:["Lunge","Goblet Squat"],                     eq:["bodyweight","bench"] },
+    { name:"Weighted Dip",           alts:["Close-Grip Bench Press","Tricep Dips"],     eq:["pullupbar","dipbelt"] },
+    { name:"Inverted Row",           alts:["Dumbbell Row","Barbell Row"],               eq:["pullupbar","bodyweight"] },
+    { name:"Dumbbell Shoulder Press",alts:["Pike Push-Up","Overhead Press"],            eq:["dumbbells"] },
+    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"] },
+    { name:"Ab Wheel Rollout",       alts:["Dead Bug","Plank"],                         eq:["abwheel"] },
+  ],
+  "Full Body C": [
     // The only loaded hinge in the rotation. RDL rather than conventional
     // deadlift by default — same posterior chain, less spinal compression.
     { name:"Romanian Deadlift",      alts:["Barbell Deadlift","Single-Leg RDL"],        eq:["dumbbells","barbell"] },
@@ -497,16 +513,6 @@ const DAY_TEMPLATES = {
     { name:"Dumbbell Row",           alts:["Single-Arm Dumbbell Row","Inverted Row"],   eq:["dumbbells"] },
     { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"] },
     { name:"EZ Bar Curl",            alts:["Dumbbell Curl","Chin-Up"],                  eq:["ezbar"] },
-  ],
-  "Full Body C": [
-    // Unilateral lower body: quad work with no bar on the back, so the third
-    // session of the week adds no axial load on top of A's squat and B's hinge.
-    { name:"Bulgarian Split Squat",  alts:["Lunge","Goblet Squat"],                     eq:["bodyweight","bench"] },
-    { name:"Weighted Dip",           alts:["Close-Grip Bench Press","Tricep Dips"],     eq:["pullupbar","dipbelt"] },
-    { name:"Inverted Row",           alts:["Dumbbell Row","Barbell Row"],               eq:["pullupbar","bodyweight"] },
-    { name:"Dumbbell Shoulder Press",alts:["Pike Push-Up","Overhead Press"],            eq:["dumbbells"] },
-    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"] },
-    { name:"Ab Wheel Rollout",       alts:["Dead Bug","Plank"],                         eq:["abwheel"] },
   ],
   "Upper A": [
     { name:"Barbell Bench Press",    alts:["Dumbbell Bench Press","Push-Up"],           eq:["barbell","bench"] },
@@ -860,7 +866,7 @@ const STRETCH_ROUTINES = {
     label: "Lower Back",
     desc:  "McKenzie extension · deep-core stability · spinal mobility",
     color: "var(--blue)",
-    afterDay: ["Pull","Back","Lower B","Full Body B"],
+    afterDay: ["Pull","Back","Lower B","Full Body C"],
     // Extension bias and deep core first — the two that matter for a disc — then
     // mobility. Knee to Chest (the one flexion drill) is now a swap option only,
     // so nothing in the routine works against the extension preference.
@@ -870,7 +876,7 @@ const STRETCH_ROUTINES = {
     label: "Hips & Legs",
     desc:  "Hip flexors · glute activation · rotators · posterior chain",
     color: "var(--green)",
-    afterDay: ["Legs","Lower A","Full Body","Full Body C"],
+    afterDay: ["Legs","Lower A","Full Body","Full Body B"],
     // Hip flexor and glutes first: anterior pelvic tilt is the mechanical link
     // between tight hip flexors, weak glutes and lumbar load.
     items: ["Hip Flexor Lunge","Glute Bridge Hold","Figure-4 Piriformis","90/90 Hip Rotation","Supine Hamstring Stretch","Standing Quad Stretch"],
@@ -1091,12 +1097,20 @@ function buildTrainingContext(history, data) {
   const pushSets = countSetsIn(last28, HORIZ_PUSH);
   const pullSets = countSetsIn(last28, HORIZ_PULL);
   const lastHinge = lifting.find(h => Object.keys(h.log || {}).some(ex => LOADED_HINGE.includes(ex)));
+  // Threshold is 2 days, not 3. Three sessions a week with two of them loading
+  // the spine averages 3.5 days apart, so the best achievable spacing is 4 and
+  // 3 — flagging 3 would fire every week on a correctly ordered rotation and
+  // train the reader to ignore it. In the historical log, gaps <= 3 days
+  // happened 9 times and gaps <= 2 days happened 3 times; the latter is the
+  // band that is both risky and avoidable.
   const hingePairs = [];
+  const spineGaps = [];
   const hingeOrAxial = lifting.filter(h => Object.keys(h.log || {})
     .some(ex => LOADED_HINGE.includes(ex) || ex === "Barbell Squat" || ex === "Barbell Row"));
   for (let i = 1; i < hingeOrAxial.length && i < 8; i++) {
     const g = daysBetween(hingeOrAxial[i - 1].date, hingeOrAxial[i].date);
-    if (g > 0 && g <= 3) hingePairs.push(g);
+    if (g > 0) spineGaps.push(g);
+    if (g > 0 && g <= 2) hingePairs.push(g);
   }
   const lastStretch = all.find(h => h.day === "Stretch");
 
@@ -1118,6 +1132,7 @@ function buildTrainingContext(history, data) {
     ratio: pushSets ? pullSets / pushSets : null,
     daysSinceHinge: lastHinge ? daysBetween(today, lastHinge.date) : null,
     closeSpineSessions: hingePairs.length,
+    minSpineGap: spineGaps.length ? Math.min(...spineGaps) : null,
     daysSinceStretch: lastStretch ? daysBetween(today, lastStretch.date) : null,
     stretchEver: !!lastStretch,
     belowMEV,
@@ -1140,7 +1155,8 @@ function formatTrainingContext(ctx) {
   if (ctx.ratio != null)
     L.push(`MANAGED — upper-back kyphosis. Last 28 days: ${ctx.pullSets} horizontal pull sets vs ${ctx.pushSets} horizontal push (${ctx.ratio.toFixed(2)}:1). Target is at least 1:1.`);
   L.push(`MANAGED — lumbar disc. ${ctx.daysSinceHinge != null ? `Last loaded hinge ${ctx.daysSinceHinge} days ago.` : "No recent loaded hinge."}` +
-    ` Loaded-spine sessions landing within 3 days of each other, recently: ${ctx.closeSpineSessions}. Target is 0.`);
+    ` Loaded-spine sessions landing within 2 days of each other, recently: ${ctx.closeSpineSessions} (target 0).` +
+    (ctx.minSpineGap != null ? ` Closest spacing recently: ${ctx.minSpineGap} days — 3 or more is fine.` : ""));
   L.push(ctx.stretchEver
     ? `Mobility routine last done ${ctx.daysSinceStretch} days ago.`
     : `Mobility routine has NEVER been logged, though it exists and is written for these two problems.`);
