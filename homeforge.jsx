@@ -139,10 +139,33 @@ const REP_RANGES = {
   general:     { sets: 3, reps: "10-15",restSec: 60,  note: "Balanced volume",       rirMin: 2 },
 };
 
+// Working sets are prescribed at RIR 2, not to failure. 81% of the logged sets
+// came in at RIR <= 2 and 19% at RIR <= 1; at 49 that buys fatigue and joint
+// wear rather than extra growth, and it preceded both training layoffs.
+const TARGET_RIR = 2;
+
+// The rep window for one exercise: its own repOverride if it has one, otherwise
+// the goal's range. Returned as numbers so the progression gate can compare.
+function repWindow(exName, goal) {
+  let range = (REP_RANGES[goal] || REP_RANGES.hypertrophy).reps;
+  for (const list of Object.values(EXERCISE_DB)) {
+    if (!Array.isArray(list)) continue;
+    const hit = list.find(e => e.name === exName);
+    if (hit && hit.repOverride) { range = hit.repOverride; break; }
+  }
+  const [lo, hi] = String(range).split("-").map(n => parseInt(n));
+  return { lo: lo || 8, hi: hi || lo || 12 };
+}
+function repRangeTop(exName, goal)    { return repWindow(exName, goal).hi; }
+function repRangeBottom(exName, goal) { return repWindow(exName, goal).lo; }
+
 const SPLITS = {
   1: ["Full Body"],
   2: ["Full Body A","Full Body B"],
-  3: ["Push","Pull","Legs"],
+  // 3-day is a rotation, not a repeat: every muscle is hit each session, but no
+  // single exercise recurs within the week and the loaded hinge lives only in B.
+  // PPL at 3 days gives each muscle 1x/week; this gives 3x at the same gym cost.
+  3: ["Full Body A","Full Body B","Full Body C"],
   4: ["Upper A","Lower A","Upper B","Lower B"],
   5: ["Push","Pull","Legs","Upper","Full Body"],
   6: ["Chest","Back","Legs","Shoulders","Arms","Full Body"],
@@ -152,7 +175,9 @@ const SPLITS = {
 const SPLIT_MAP = {
   "Push":["Push","Core"],"Pull":["Pull","Core"],"Legs":["Legs","Core"],
   "Full Body":["Push","Pull","Legs","Full Body","Core"],
-  "Full Body A":["Push","Pull","Core"],"Full Body B":["Legs","Full Body","Core"],
+  "Full Body A":["Push","Pull","Legs","Core"],
+  "Full Body B":["Push","Pull","Legs","Core"],
+  "Full Body C":["Push","Pull","Legs","Core"],
   "Upper A":["Push","Pull","Core"],"Upper B":["Upper","Core"],
   "Lower A":["Legs","Core"],"Lower B":["Legs","Core"],
   "Chest":["Push","Core"],"Back":["Pull","Core"],
@@ -164,7 +189,9 @@ const MUSCLE_MAP = {
   "Push":["chest","shoulders","triceps"],"Pull":["back","biceps","hamstrings","glutes"],
   "Legs":["quads","hamstrings","glutes","calves"],
   "Full Body":["chest","back","quads","hamstrings"],
-  "Full Body A":["chest","back","triceps","biceps"],"Full Body B":["quads","hamstrings","glutes"],
+  "Full Body A":["chest","back","shoulders","quads","glutes"],
+  "Full Body B":["chest","back","biceps","hamstrings","glutes"],
+  "Full Body C":["chest","back","shoulders","triceps","quads"],
   "Upper A":["chest","back","shoulders","triceps","biceps"],
   "Upper B":["chest","back","shoulders"],"Lower A":["quads","hamstrings","glutes"],
   "Lower B":["quads","hamstrings","glutes"],"Chest":["chest","triceps"],
@@ -199,6 +226,7 @@ const EXERCISE_DB = {
     { name:"Weighted Chin-Up",      eq:["pullupbar","dipbelt"],         muscle:"Biceps/Back",     unilateral:false },
     { name:"Inverted Row",          eq:["pullupbar","bodyweight"],      muscle:"Upper Back",       unilateral:false },
     { name:"Dumbbell Row",          eq:["dumbbells"],                   muscle:"Back",            unilateral:true  },
+    { name:"Single-Arm Dumbbell Row",eq:["dumbbells","bench"],          muscle:"Back",            unilateral:true  },
     { name:"Dumbbell Curl",         eq:["dumbbells"],                   muscle:"Biceps",          unilateral:true  },
     { name:"Band Pull-Apart",       eq:["bands"],                       muscle:"Rear Delt",       unilateral:false },
     { name:"Face Pull",             eq:["bands"],                  muscle:"Rear Delt/Upper Back", unilateral:false },
@@ -442,21 +470,43 @@ const DAY_TEMPLATES = {
     { name:"Dumbbell Shoulder Press",alts:["Overhead Press","Pike Push-Up"],            eq:["dumbbells"] },
     { name:"Plank",                  alts:["Dead Bug"],                                 eq:["bodyweight","mat"] },
   ],
+  // ── Full Body A / B / C — the 2- and 3-day rotation ───────────────────────
+  // Three rules hold across all three, and they are the reason these templates
+  // exist rather than Push/Pull/Legs:
+  //   1. Horizontal pull >= horizontal push in EVERY session. The log ran 6.0
+  //      push sets/wk against 1.8 pull (0.30:1) while kyphosis was the thing
+  //      being managed. One press, one row, no exceptions.
+  //   2. Face Pull in every session. Rear delt was 1.1 sets/wk.
+  //   3. The loaded hinge appears in B only. Deadlift on Pull day and RDL on
+  //      Legs day landed 2-3 days apart nine times — the worst pattern in the
+  //      log for a lumbar disc. One hinge per rotation removes it structurally.
   "Full Body A": [
+    { name:"Barbell Squat",          alts:["Goblet Squat","Squat"],                     eq:["barbell","squatstands"] },
     { name:"Barbell Bench Press",    alts:["Dumbbell Bench Press","Push-Up"],           eq:["barbell","bench"] },
-    { name:"Weighted Pull-Up",       alts:["Pull-Up","Inverted Row"],                   eq:["pullupbar"] },
+    { name:"Single-Arm Dumbbell Row",alts:["Dumbbell Row","Inverted Row"],              eq:["dumbbells","bench"] },
     { name:"Dumbbell Shoulder Press",alts:["Overhead Press","Pike Push-Up"],            eq:["dumbbells"] },
-    { name:"EZ Bar Skull Crusher",   alts:["Tricep Overhead Ext","Tricep Dips"],        eq:["ezbar"] },
-    { name:"EZ Bar Curl",            alts:["Dumbbell Curl","Chin-Up"],                  eq:["ezbar"] },
-    { name:"Plank",                  alts:["Dead Bug"],                                 eq:["bodyweight","mat"] },
+    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"] },
+    { name:"Dead Bug",               alts:["Plank"],                                    eq:["bodyweight","mat"] },
   ],
   "Full Body B": [
-    { name:"Barbell Squat",          alts:["Goblet Squat","Squat"],                     eq:["barbell","squatstands"] },
-    { name:"Barbell Deadlift",       alts:["Romanian Deadlift","Single-Leg RDL"],       eq:["barbell"] },
-    { name:"Bulgarian Split Squat",  alts:["Lunge","Single-Leg Glute Bridge"],          eq:["bodyweight","bench"] },
-    { name:"Goblet Squat",           alts:["Banded Squat","Squat"],                     eq:["dumbbells"] },
-    { name:"Calf Raise",             alts:["Calf Raise"],                               eq:["bodyweight"] },
-    { name:"Dead Bug",               alts:["Plank"],                                    eq:["bodyweight","mat"] },
+    // The only loaded hinge in the rotation. RDL rather than conventional
+    // deadlift by default — same posterior chain, less spinal compression.
+    { name:"Romanian Deadlift",      alts:["Barbell Deadlift","Single-Leg RDL"],        eq:["dumbbells","barbell"] },
+    { name:"Assisted Pull-Up",       alts:["Pull-Up","Inverted Row"],                   eq:["pullupbar"] },
+    { name:"Dumbbell Bench Press",   alts:["Barbell Bench Press","Push-Up"],            eq:["dumbbells","bench"] },
+    { name:"Dumbbell Row",           alts:["Single-Arm Dumbbell Row","Inverted Row"],   eq:["dumbbells"] },
+    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"] },
+    { name:"EZ Bar Curl",            alts:["Dumbbell Curl","Chin-Up"],                  eq:["ezbar"] },
+  ],
+  "Full Body C": [
+    // Unilateral lower body: quad work with no bar on the back, so the third
+    // session of the week adds no axial load on top of A's squat and B's hinge.
+    { name:"Bulgarian Split Squat",  alts:["Lunge","Goblet Squat"],                     eq:["bodyweight","bench"] },
+    { name:"Weighted Dip",           alts:["Close-Grip Bench Press","Tricep Dips"],     eq:["pullupbar","dipbelt"] },
+    { name:"Inverted Row",           alts:["Dumbbell Row","Barbell Row"],               eq:["pullupbar","bodyweight"] },
+    { name:"Dumbbell Shoulder Press",alts:["Pike Push-Up","Overhead Press"],            eq:["dumbbells"] },
+    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"] },
+    { name:"Ab Wheel Rollout",       alts:["Dead Bug","Plank"],                         eq:["abwheel"] },
   ],
   "Upper A": [
     { name:"Barbell Bench Press",    alts:["Dumbbell Bench Press","Push-Up"],           eq:["barbell","bench"] },
@@ -820,7 +870,7 @@ const STRETCH_ROUTINES = {
     label: "Hips & Legs",
     desc:  "Hip flexors · glute activation · rotators · posterior chain",
     color: "var(--green)",
-    afterDay: ["Legs","Lower A","Full Body"],
+    afterDay: ["Legs","Lower A","Full Body","Full Body C"],
     // Hip flexor and glutes first: anterior pelvic tilt is the mechanical link
     // between tight hip flexors, weak glutes and lumbar load.
     items: ["Hip Flexor Lunge","Glute Bridge Hold","Figure-4 Piriformis","90/90 Hip Rotation","Supine Hamstring Stretch","Standing Quad Stretch"],
@@ -857,7 +907,7 @@ function getStretchItems(focus, totalMinutes) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 // ── Trend detection ─────────────────────────────────────────────────────────
-function detectTrends(day, history) {
+function detectTrends(day, history, bodyWeight) {
   const flags = [];
   // Weights-mode only — trends here are about load stalls and volume drops.
   const sameDaySessions = weightsHistory(history)
@@ -883,7 +933,7 @@ function detectTrends(day, history) {
   }
 
   // 2. Volume trend — 3 consecutive drops
-  const vols = sameDaySessions.map(h => h.volume || 0);
+  const vols = sameDaySessions.map(h => sessionVolume(h, bodyWeight));
   if (vols.length >= 3 && vols[0] < vols[1] && vols[1] < vols[2])
     flags.push({ type:"volume", msg:`${day} volume has dropped 3 sessions in a row — check fatigue` });
 
@@ -907,8 +957,65 @@ function detectTrends(day, history) {
   return flags;
 }
 
+// ── Effective load ───────────────────────────────────────────────────────────
+// Volume used to be weight x reps, full stop. That made a +15kg dip log 120kg
+// when the athlete actually moved (83+15)x8 = 784kg, made added ASSISTANCE on a
+// pull-up read as added load, and scored every bodyweight session as 0. The
+// volume chart, the deload trigger and the "volume dropped" trend flag all fed
+// on that number, so all three were wrong for the pulling movements.
+//
+// Fraction of bodyweight the movement actually lifts. 1 = the whole body.
+const BW_LOAD_FRACTION = {
+  "Pull-Up": 1, "Chin-Up": 1, "Neutral Grip Pull-Up": 1, "Assisted Pull-Up": 1,
+  "Weighted Pull-Up": 1, "Weighted Chin-Up": 1,
+  "Tricep Dips": 1, "Weighted Dip": 1, "Bench Dips": 0.35,
+  "Push-Up": 0.64, "Weighted Push-Up": 0.64, "Diamond Push-Up": 0.64,
+  "Pike Push-Up": 0.7, "Inverted Row": 0.6,
+  "Squat": 0.85, "Bulgarian Split Squat": 0.85, "Lunge": 0.85, "Sissy Squat": 0.85,
+  "Calf Raise": 0.9, "Single-Leg Glute Bridge": 0.45,
+  // TRX / suspension: leverage sets the load, so these are rough angle-based
+  // fractions. Without them a whole TRX session scored 0kg and read to the
+  // trend detector as a total collapse in volume.
+  "TRX Chest Press": 0.55, "TRX Chest Fly": 0.5, "TRX Tricep Extension": 0.45,
+  "TRX Pike Push-Up": 0.7, "TRX Pike": 0.7, "TRX Low Row": 0.6, "TRX High Row": 0.55,
+  "TRX Y-Fly": 0.4, "TRX Bicep Curl": 0.45, "TRX Squat": 0.6,
+  "TRX Bulgarian Split Squat": 0.8, "TRX Hamstring Curl": 0.5, "TRX Hip Hinge": 0.5,
+  "TRX Squat to Row": 0.7, "TRX Burpee": 0.8, "TRX Plank": 0.6, "TRX Body Saw": 0.6,
+  "TRX Mountain Climber": 0.6,
+  // Isometric / low-load core and postural work still moves the torso.
+  "Plank": 0.5, "Dead Bug": 0.2, "Bicycle Crunch": 0.2, "Ab Wheel Rollout": 0.5,
+  "Balance Disc Plank": 0.5, "Thoracic Extension": 0.2, "Mountain Climber": 0.5,
+};
+// Exercises where the logged number is assistance (band/machine), not added load.
+const ASSISTED_EX = ["Assisted Pull-Up"];
+
+function effectiveSetLoad(exName, weight, bodyWeight) {
+  const w  = parseFloat(weight) || 0;
+  const bw = parseFloat(bodyWeight) || 0;
+  const frac = BW_LOAD_FRACTION[exName];
+  if (frac == null) return w;                      // pure external load
+  const base = bw * frac;
+  if (ASSISTED_EX.includes(exName)) return Math.max(0, base - w);
+  return base + w;                                 // bodyweight, optionally loaded
+}
+
+// Recomputed from the stored log so old sessions and new ones use one formula.
+// Falls back to the persisted number only when the log is missing.
+function sessionVolume(h, bodyWeight) {
+  if (!h) return 0;
+  if (!h.log || !Object.keys(h.log).length) return parseFloat(h.volume) || 0;
+  let v = 0;
+  Object.entries(h.log).forEach(([exName, sets]) => {
+    (sets || []).forEach(s => {
+      const reps = parseInt(s.reps) || 0;
+      if (reps > 0) v += effectiveSetLoad(exName, s.weight, bodyWeight) * reps;
+    });
+  });
+  return v;
+}
+
 // ── Weekly volume (last N weeks, oldest→newest) ───────────────────────────────
-function getWeeklyVolumes(history, numWeeks = 6) {
+function getWeeklyVolumes(history, numWeeks = 6, bodyWeight) {
   const now = new Date();
   const curWeekStart = new Date(now);
   curWeekStart.setDate(now.getDate() - now.getDay());
@@ -919,9 +1026,127 @@ function getWeeklyVolumes(history, numWeeks = 6) {
     const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate() + 7);
     const vol = (history || [])
       .filter(h => { const d = new Date(h.date); return d >= wStart && d < wEnd; })
-      .reduce((a, h) => a + (parseFloat(h.volume) || 0), 0);
+      .reduce((a, h) => a + sessionVolume(h, bodyWeight), 0);
     return { vol, isCurrent: i === numWeeks - 1 };
   });
+}
+
+// ── Training context ─────────────────────────────────────────────────────────
+// Everything the coach needs that is NOT in today's log: whether sessions are
+// actually happening, whether fatigue is accumulating, and whether the two
+// managed problems (kyphosis, lumbar disc) are being fed or fixed. Without this
+// the analysis can only restate the numbers it was handed, which is why it read
+// as mechanical — it had no way to know a session came after an 18-day gap.
+const DAY_MS = 86400000;
+const daysBetween = (a, b) => Math.round((new Date(a) - new Date(b)) / DAY_MS);
+
+// Movement patterns that decide the push:pull balance. Kyphosis is managed by
+// the horizontal ratio specifically, so vertical work is tracked separately.
+const HORIZ_PUSH = ["Barbell Bench Press","Dumbbell Bench Press","Dumbbell Fly","Weighted Dip",
+  "Push-Up","Weighted Push-Up","Diamond Push-Up","Close-Grip Bench Press","Bench Dips",
+  "Single-Arm DB Press","TRX Chest Press","TRX Chest Fly","Resistance Band Press"];
+const HORIZ_PULL = ["Dumbbell Row","Single-Arm Dumbbell Row","Barbell Row","Inverted Row",
+  "Face Pull","Band Pull-Apart","TRX Low Row","TRX High Row","TRX Y-Fly","Resistance Band Row","Kettlebell Row"];
+const LOADED_HINGE = ["Barbell Deadlift","Romanian Deadlift","Barbell Good Morning","Single-Leg RDL"];
+
+function countSetsIn(sessions, names) {
+  let n = 0;
+  (sessions || []).forEach(h => Object.entries(h.log || {}).forEach(([ex, sets]) => {
+    if (names.includes(ex)) n += (sets || []).filter(x => x.reps && parseInt(x.reps) > 0).length;
+  }));
+  return n;
+}
+
+function buildTrainingContext(history, data) {
+  const all = (history || []).filter(h => h.date);
+  const lifting = all.filter(h => h.day !== "Stretch");
+  if (!lifting.length) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const win = (days) => lifting.filter(h => daysBetween(today, h.date) <= days);
+  const last28 = win(28), last14 = win(14);
+
+  // ── Adherence ──
+  const planned = parseInt(data?.days) || 3;
+  const gaps = [];
+  for (let i = 1; i < Math.min(lifting.length, 12); i++) gaps.push(daysBetween(lifting[i - 1].date, lifting[i].date));
+  const prevSession = lifting[1] || lifting[0];
+  const gapBefore = lifting.length > 1 ? daysBetween(lifting[0].date, lifting[1].date) : null;
+  const perWeek28 = (last28.length / 4);
+
+  // ── Fatigue ──
+  const sessionRIR = (h) => {
+    const r = Object.values(h.log || {}).flat().map(x => parseFloat(x.rpe)).filter(v => !isNaN(v));
+    return r.length ? r.reduce((a, b) => a + b, 0) / r.length : null;
+  };
+  const rirSeries = lifting.slice(0, 6).map(sessionRIR).filter(v => v !== null);
+  const hardShare = (h) => {
+    const r = Object.values(h.log || {}).flat().map(x => parseFloat(x.rpe)).filter(v => !isNaN(v));
+    return r.length ? r.filter(v => v <= 1).length / r.length : 0;
+  };
+  const hardRecent = lifting.slice(0, 4).map(hardShare);
+  const meso = initMesocycle(data?.mesocycle);
+  const lastDeload = all.find(h => h.phase === "deload");
+
+  // ── Structure: the two managed problems ──
+  const pushSets = countSetsIn(last28, HORIZ_PUSH);
+  const pullSets = countSetsIn(last28, HORIZ_PULL);
+  const lastHinge = lifting.find(h => Object.keys(h.log || {}).some(ex => LOADED_HINGE.includes(ex)));
+  const hingePairs = [];
+  const hingeOrAxial = lifting.filter(h => Object.keys(h.log || {})
+    .some(ex => LOADED_HINGE.includes(ex) || ex === "Barbell Squat" || ex === "Barbell Row"));
+  for (let i = 1; i < hingeOrAxial.length && i < 8; i++) {
+    const g = daysBetween(hingeOrAxial[i - 1].date, hingeOrAxial[i].date);
+    if (g > 0 && g <= 3) hingePairs.push(g);
+  }
+  const lastStretch = all.find(h => h.day === "Stretch");
+
+  // ── Volume vs MEV ──
+  const sets28 = getMuscleWeeklySets(last28);
+  const belowMEV = Object.entries(MRV_TARGETS)
+    .map(([m, t]) => ({ m, wk: (sets28[m] || 0) / 4, mev: t.mev }))
+    .filter(x => x.wk < x.mev)
+    .sort((a, b) => (a.wk / a.mev) - (b.wk / b.mev))
+    .slice(0, 5);
+
+  return {
+    planned, perWeek28, last14: last14.length, last28: last28.length,
+    gapBefore, maxGap: gaps.length ? Math.max(...gaps) : null,
+    daysSinceLast: lifting.length > 1 ? daysBetween(today, lifting[1].date) : null,
+    rirSeries, hardRecent, meso,
+    daysSinceDeload: lastDeload ? daysBetween(today, lastDeload.date) : null,
+    pushSets, pullSets,
+    ratio: pushSets ? pullSets / pushSets : null,
+    daysSinceHinge: lastHinge ? daysBetween(today, lastHinge.date) : null,
+    closeSpineSessions: hingePairs.length,
+    daysSinceStretch: lastStretch ? daysBetween(today, lastStretch.date) : null,
+    stretchEver: !!lastStretch,
+    belowMEV,
+  };
+}
+
+function formatTrainingContext(ctx) {
+  if (!ctx) return "";
+  const L = [];
+  L.push(`Planned ${ctx.planned}x/week — actual ${ctx.perWeek28.toFixed(1)}x/week over the last 28 days (${ctx.last28} sessions; ${ctx.last14} in the last 14).`);
+  if (ctx.gapBefore != null)
+    L.push(`Gap before this session: ${ctx.gapBefore} days${ctx.gapBefore >= 10 ? " — this session follows a layoff" : ""}.`);
+  if (ctx.maxGap != null) L.push(`Longest gap in the last 12 sessions: ${ctx.maxGap} days.`);
+  if (ctx.rirSeries.length)
+    L.push(`Avg RIR, last ${ctx.rirSeries.length} sessions (newest first): ${ctx.rirSeries.map(v => v.toFixed(1)).join(", ")}. Prescription is RIR ${TARGET_RIR}.`);
+  if (ctx.hardRecent.length)
+    L.push(`Share of sets taken to RIR<=1: ${ctx.hardRecent.map(v => Math.round(v * 100) + "%").join(", ")}.`);
+  L.push(`Mesocycle: ${ctx.meso.phase} ${ctx.meso.sessionCount}/${PHASE_LENGTHS[ctx.meso.phase] || 5}. Deload is scheduled every 6th session.` +
+    (ctx.daysSinceDeload != null ? ` Last deload ${ctx.daysSinceDeload} days ago.` : " No deload found in the log."));
+  if (ctx.ratio != null)
+    L.push(`MANAGED — upper-back kyphosis. Last 28 days: ${ctx.pullSets} horizontal pull sets vs ${ctx.pushSets} horizontal push (${ctx.ratio.toFixed(2)}:1). Target is at least 1:1.`);
+  L.push(`MANAGED — lumbar disc. ${ctx.daysSinceHinge != null ? `Last loaded hinge ${ctx.daysSinceHinge} days ago.` : "No recent loaded hinge."}` +
+    ` Loaded-spine sessions landing within 3 days of each other, recently: ${ctx.closeSpineSessions}. Target is 0.`);
+  L.push(ctx.stretchEver
+    ? `Mobility routine last done ${ctx.daysSinceStretch} days ago.`
+    : `Mobility routine has NEVER been logged, though it exists and is written for these two problems.`);
+  if (ctx.belowMEV.length)
+    L.push(`Below minimum effective volume (sets/week vs MEV): ${ctx.belowMEV.map(x => `${x.m} ${x.wk.toFixed(1)}/${x.mev}`).join(", ")}.`);
+  return L.map(l => "- " + l).join(String.fromCharCode(10));
 }
 
 // ── PR detection — did last session beat any prior best? ─────────────────────
@@ -947,7 +1172,12 @@ function detectRecentPR(history) {
 }
 
 // ── Mesocycle helpers ────────────────────────────────────────────────────────
-const PHASE_LENGTHS = { accumulation: 12, intensification: 9, deload: 3 };
+// Five working sessions then one deload — a deload lands every 6th session
+// instead of every 21st. Across 22 logged weeks not one voluntary deload was
+// taken: average RIR drifted 2.0 -> 1.45 through June and July and both breaks
+// that followed were involuntary (10 days, then 18). At 49 the recovery ceiling
+// is the binding constraint, so the deload is scheduled rather than earned.
+const PHASE_LENGTHS = { accumulation: 5, intensification: 5, deload: 1 };
 
 function initMesocycle(existing) {
   if (existing && existing.phase) return existing;
@@ -959,7 +1189,7 @@ function initMesocycle(existing) {
 function reconcileMesocycle(mesocycle, history) {
   const m = initMesocycle(mesocycle);
   if (m.sessionCount > 0 || !history || history.length === 0) return m;
-  const phaseLen = PHASE_LENGTHS[m.phase] || 12;
+  const phaseLen = PHASE_LENGTHS[m.phase] || 5;
   // Mesocycle phases track the lifting block only.
   const trainingSessions = weightsHistory(history).filter(h => h.day !== "Stretch");
   const count = m.startDate
@@ -969,10 +1199,13 @@ function reconcileMesocycle(mesocycle, history) {
   return { ...m, sessionCount, pendingTransition: sessionCount >= phaseLen };
 }
 
-function nextPhase(phase) {
-  if (phase === "accumulation")   return "intensification";
+// Cycle: accumulation -> deload -> intensification -> deload -> accumulation.
+// A deload follows every working block, so which block comes after one depends
+// on the block it just followed; `lastBlock` carries that.
+function nextPhase(phase, lastBlock) {
+  if (phase === "accumulation")    return "deload";
   if (phase === "intensification") return "deload";
-  return "accumulation";
+  return lastBlock === "accumulation" ? "intensification" : "accumulation";
 }
 
 function phaseLabel(phase) {
@@ -1125,11 +1358,11 @@ function getMuscleWarnings(day, history) {
   return warnings;
 }
 
-function shouldDeload(history) {
+function shouldDeload(history, bodyWeight) {
   // Volume-based, so only weights sessions count (TRX/BW log volume 0).
   const loaded = weightsHistory(history);
   if (loaded.length < 4) return false;
-  const v = loaded.slice(0, 4).map(h => h.volume || 0);
+  const v = loaded.slice(0, 4).map(h => sessionVolume(h, bodyWeight));
   if (v[0] < v[1] && v[1] < v[2] && v[2] < v[3]) return true;
   const weeks = (new Date() - new Date(loaded[loaded.length - 1]?.date)) / (7 * 86400000);
   return weeks >= 4 && loaded.length >= 12;
@@ -1715,7 +1948,7 @@ function ScheduleScreen({ data, setData, onNext }) {
   const split = SPLITS[days] || SPLITS[3];
   const rr = REP_RANGES[data.goal] || REP_RANGES.general;
   const goal = GOALS.find(g => g.id === data.goal);
-  const deload = shouldDeload(data.history);
+  const deload = shouldDeload(data.history, data.weight);
   useEffect(() => { setData(d => ({ ...d, split })); }, []);
 
   return (
@@ -1783,7 +2016,10 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const _meso    = initMesocycle(data.mesocycle);
   const _isDeload   = _meso.phase === "deload";
   const _isIntense  = _meso.phase === "intensification";
-  const numSets = (isTimed || repOverride) ? effectiveSets : _isDeload ? 2 : rr.sets;
+  // Two-thirds of the working sets, not half: enough to hold the movement
+  // pattern without adding fatigue.
+  const numSets = (isTimed || repOverride) ? effectiveSets
+    : _isDeload ? Math.max(2, Math.round(rr.sets * 2 / 3)) : rr.sets;
   const suggestion = useMemo(
     () => getSmartSuggestion(key, goal, history, data.profileBaseline, data),
     [key, goal, history, data.profileBaseline, data.nextSession, data.activeMode, data.barWeight, data.barbellPlates, data.ezbarWeight, data.ezbarPlates, data.dumbbellMax]
@@ -2018,7 +2254,10 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
           <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--blue)", marginTop:2 }}>estimated from {CROSS_RATIOS[key]?.from}</div>
         )}
         {!isTimed && suggestion?.planRIR !== undefined && (
-          <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--green)", marginTop:2 }}>last session avg RIR {suggestion.planRIR} → adjusted</div>
+          <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--green)", marginTop:2 }}>
+            last session avg RIR {suggestion.planRIR} → adjusted
+            {suggestion.planTargetRIR !== undefined && <span style={{ color:"var(--muted)" }}> · leave {suggestion.planTargetRIR} in reserve</span>}
+          </div>
         )}
         {!isTimed && !suggestion && !repOverride && (
           <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", marginTop:2 }}>Log first session to get weight suggestions</div>
@@ -2282,17 +2521,18 @@ function buildSessionSummaryPrompt(entry, prevHistory, data) {
         });
         const hAvgRIR = tCount > 0 ? (tRIR / tCount).toFixed(1) : "?";
         const stars = h.rating ? "★".repeat(parseInt(h.rating)) : "unrated";
-        return `  ${h.date}: ${(h.volume || 0).toFixed(0)}kg | avg RIR ${hAvgRIR} | ${stars}`;
+        return `  ${h.date}: ${sessionVolume(h, data.weight).toFixed(0)}kg | avg RIR ${hAvgRIR} | ${stars}`;
       }).join("\n")
     : "  No previous same-day sessions";
 
   const prev = sameDayHistory[0];
   const volDelta = prev
-    ? ` (${volume >= (prev.volume || 0) ? "+" : ""}${(((volume - (prev.volume || 0)) / Math.max(prev.volume || 1, 1)) * 100).toFixed(0)}% vs last ${day})`
+    ? (() => { const pv = sessionVolume(prev, data.weight);
+        return ` (${volume >= pv ? "+" : ""}${(((volume - pv) / Math.max(pv, 1)) * 100).toFixed(0)}% vs last ${day})`; })()
     : "";
 
   // Weekly volume trend (last 6 weeks)
-  const weekVols = getWeeklyVolumes(prevHistory, 6);
+  const weekVols = getWeeklyVolumes(prevHistory, 6, data.weight);
   const weekVolStr = weekVols.map((w, i) => `W${i + 1}:${Math.round(w.vol)}kg`).join(" ");
 
   // Overall RIR trajectory across all sessions (last 6)
@@ -2302,12 +2542,14 @@ function buildSessionSummaryPrompt(entry, prevHistory, data) {
     return c > 0 ? (r / c).toFixed(1) : null;
   }).filter(Boolean).reverse().join(" → ");
 
+  const trainingCtx = formatTrainingContext(buildTrainingContext(prevHistory || [], data));
   const meso = initMesocycle(data.mesocycle);
-  const phaseLen = PHASE_LENGTHS[meso.phase] || 12;
-  const deloadNote = shouldDeload(prevHistory) ? "\nNote: deload indicators present — athlete may need a lighter week." : "";
+  const phaseLen = PHASE_LENGTHS[meso.phase] || 5;
+  const deloadNote = shouldDeload(prevHistory, data.weight) ? "\nNote: deload indicators present — athlete may need a lighter week." : "";
 
   return `ATHLETE PROFILE
 Level: ${data.level || "Intermediate"} | Age: ${data.age || "?"}y | BW: ${data.weight || "?"}kg | Goal: ${data.goal || "hypertrophy"}
+Managed conditions: upper-back kyphosis, lumbar disc. Both constrain exercise choice and scheduling.
 Mesocycle: ${meso.phase} session ${meso.sessionCount}/${phaseLen}${meso.pendingTransition ? " (PHASE COMPLETE — transition pending)" : ""}${deloadNote}
 
 TODAY — ${day} (${entry.date})
@@ -2324,7 +2566,10 @@ ${weekVolStr}
 OVERALL RIR TRAJECTORY (6 sessions, oldest → newest):
 ${rirTrajectory || "insufficient data"}
 
-TOTAL SESSIONS IN LOG: ${(prevHistory || []).length}`;
+TOTAL SESSIONS IN LOG: ${(prevHistory || []).length}
+
+TRAINING CONTEXT — adherence, fatigue and the two managed conditions:
+${trainingCtx || "- Not enough history yet."}`;
 }
 
 // ── AI Analysis Panel ─────────────────────────────────────────────────────────
@@ -2625,7 +2870,8 @@ function StretchCard({ item, exNum, totalEx, focus, isSwapped, sessionNames, onS
 // ── Stretch Session ───────────────────────────────────────────────────────────
 function StretchSession({ data, setData, onBack }) {
   const suggested = suggestStretchFocus(data.history || []);
-  const [minutes, setMinutes] = useState(15);
+  // A tail on a session already finished starts short; a standalone one doesn't.
+  const [minutes, setMinutes] = useState(parseInt(data.stretchStartMinutes) || 15);
   const [focus, setFocus] = useState(suggested);
   const [finished, setFinished] = useState(false);
 
@@ -2665,7 +2911,7 @@ function StretchSession({ data, setData, onBack }) {
       <div style={{ marginBottom:18 }}>
         <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", letterSpacing:1, marginBottom:8 }}>AVAILABLE TIME</div>
         <div style={{ display:"flex", gap:8 }}>
-          {[10, 15, 20].map(m => (
+          {[6, 10, 15, 20].map(m => (
             <button key={m} type="button"
               style={{ ...S.chip(minutes === m), padding:"10px 18px", fontSize:14, fontFamily:"var(--font-h)", fontWeight:700, minHeight:44 }}
               onClick={() => setMinutes(m)}>{m} min</button>
@@ -2718,7 +2964,7 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
   const meso      = initMesocycle(data.mesocycle);
   const isDeload   = meso.phase === "deload";
   const isIntense  = meso.phase === "intensification";
-  const phaseLen   = PHASE_LENGTHS[meso.phase] || 12;
+  const phaseLen   = PHASE_LENGTHS[meso.phase] || 5;
 
   const mode      = data.activeMode || DEFAULT_MODE;
   const isWeights = isWeightsMode(mode);
@@ -2746,8 +2992,9 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
   const [sessionLog, setSessionLog] = useState({});
   const [finished, setFinished] = useState(false);
   const [trendDismissed, setTrendDismissed] = useState(false);
+  const [stretchSkipped, setStretchSkipped] = useState(false);
   const trends = useMemo(
-    () => (trendDismissed || !isWeights) ? [] : detectTrends(day, data.history || []),
+    () => (trendDismissed || !isWeights) ? [] : detectTrends(day, data.history || [], data.weight),
     [trendDismissed, isWeights, day, data.history]
   );
   const [sessionRating, setSessionRating] = useState("");
@@ -2768,7 +3015,7 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
       // Drop targetRIR: it described the RIR-derived target this proposal is
       // replacing, and carrying it over made an AI-chosen load look like your
       // own RIR produced it.
-      const { targetRIR: _staleRIR, ...carried } = current;
+      const { targetRIR: _staleRIR, lastRIR: _staleLast, ...carried } = current;
       const updatedExercise = field === "reps"
         ? { ...carried, targetReps: p.value, type: "reps", source: "ai_proposal" }
         : { ...carried, targetWeight: p.value, type: "weight", source: "ai_proposal", targetReps: carried.targetReps || 8 };
@@ -2786,9 +3033,9 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
   };
   const dismissAiProposal = (idx) => setDismissedProposals(prev => new Set(prev).add(idx));
   const age = parseInt(data.age) || 0;
-  const deload = shouldDeload(data.history);
+  const deload = shouldDeload(data.history, data.weight);
   const warnings = getMuscleWarnings(day, data.history);
-  const totalVolume = Object.values(sessionLog).flat().reduce((a,s) => a+(parseFloat(s.weight)||0)*(parseInt(s.reps)||0), 0);
+  const totalVolume = sessionVolume({ log: sessionLog }, data.weight);
   // TRX/BW sessions carry no load, so reps are the headline number instead.
   const totalReps   = Object.values(sessionLog).flat().reduce((a,s) => a+(parseInt(s.reps)||0), 0);
 
@@ -2798,7 +3045,10 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
 
   const saveSession = () => {
     // `mode` is the marker that keeps TRX/BW sessions out of weight progression.
-    const entry = { date: new Date().toISOString().slice(0,10), day, mode, volume: totalVolume, log: sessionLog, rating: sessionRating, notes: sessionNotes };
+    // phase is persisted so "when was the last deload" is answerable from the
+    // log itself rather than only from the live mesocycle counter.
+    const entry = { date: new Date().toISOString().slice(0,10), day, mode, volume: totalVolume,
+      log: sessionLog, rating: sessionRating, notes: sessionNotes, phase: meso.phase };
     const { dayType, plan } = calcNextSessionPlan(day, sessionLog, data.goal, data);
     // Non-weights plans go to their own namespace, so they only ever feed back
     // into the same mode. In TRX/BW every entry comes out as a rep target.
@@ -2823,18 +3073,36 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
     // AI session analysis — fires async, does not block the success screen
     setAiSummaryLoading(true);
     setAiSummary(null);
-    const aiSystem = `You are HomeForge AI Coach — an expert strength coach. Analyze the completed session and respond in EXACTLY this format with these three section markers on their own lines. Do not add any text before [SESSION] or after the last proposal.
+    const aiSystem = `You are HomeForge AI Coach — an expert strength coach for a 49-year-old intermediate lifter managing upper-back kyphosis and a lumbar disc.
+
+Read the TRAINING CONTEXT block before you read today's numbers. It tells you whether sessions are actually happening, whether fatigue is accumulating, and whether the two managed conditions are being fed or fixed. A session that follows an 18-day layoff means something completely different from the same numbers mid-block, and light weights after a break are correct behaviour, not a regression.
+
+Rank what you say by what actually limits progress, in this order:
+1. Adherence. If actual sessions/week is below planned, that is the binding constraint and nothing else you say matters as much. Say so plainly.
+2. Fatigue and recovery. Rising share of RIR<=1 sets, falling avg RIR across sessions, or a long run with no deload — at 49 this precedes layoffs rather than following them.
+3. The managed conditions. A horizontal pull:push ratio under 1:1 is feeding the kyphosis. Loaded-spine sessions landing within 3 days is the disc risk. Mobility work never being logged matters more than any weight on any bar.
+4. Volume below MEV for the goal.
+5. Only then, load progression on individual lifts.
+
+Rules:
+- Never recommend a weight increase in the same breath as a fatigue or layoff warning. Pick one.
+- If this session follows a gap of 10+ days, treat it as a re-entry: hold or reduce load, and say when to resume adding.
+- Prescribe RIR ${TARGET_RIR}. If recent sets sat at RIR<=1, say to back off before adding anything.
+- Cite real numbers from the data given. Never invent a number you were not shown.
+
+Respond in EXACTLY this format with these three section markers on their own lines. Do not add any text before [SESSION] or after the last proposal.
 
 [SESSION]
 One verdict sentence with a specific volume or intensity number. Then 2-3 sentences citing actual weights, RIR values, or set data from today's log. Be direct.
 
 [TRENDS]
-2-3 sentences on multi-session patterns. Reference exercise names, volume numbers, and RIR trajectory from the history provided. Note progressions, stalls, or warning signs.
+2-4 sentences. Lead with whichever of adherence, fatigue, or the managed conditions the context block shows is worst right now — cite the number from the context block, not just today's log. Then note the multi-session pattern on specific exercises. If adherence and fatigue are both fine, say that and move to load progression.
 
 [PROPOSALS]
 A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 concrete target changes for the next ${day} session. Each item: {"exercise": "<name>", "field": "weight"|"reps", "value": <number>, "reason": "<reason, under 15 words>"}. "exercise" must exactly match one of: ${Object.keys(sessionLog).join(", ")}. ${isWeights
   ? `Use "field":"weight" for barbell/dumbbell/EZ-bar/dip-belt exercises and "field":"reps" for bodyweight/timed/reps-only exercises.`
-  : `This was a ${modeLabel(mode)} session with no external load — every proposal must use "field":"reps". Never propose a weight.`} Base values on the rep/RIR data above — call out stalls, overreach, or easy sessions. If no concrete change is warranted, return [].`;
+  : `This was a ${modeLabel(mode)} session with no external load — every proposal must use "field":"reps". Never propose a weight.`} Progression is double progression: add a rep until the top of the range, then add load and reset to the bottom. If the context shows a layoff, accumulated fatigue, or a due deload, propose holding or reducing — an empty array [] is the right answer when no change is warranted.`;
+
     callClaude([{ role: "user", content: buildSessionSummaryPrompt(entry, data.history || [], data) }], aiSystem)
       .then(text => setAiSummary(text))
       .catch(() => setAiSummary("[SESSION]\nCould not generate analysis — check your connection.\n[TRENDS]\n—\n[PROPOSALS]\n—"))
@@ -2884,7 +3152,7 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
             Phase complete — {meso.sessionCount} {phaseLabel(meso.phase).toLowerCase()} sessions done
           </div>
           <div style={{ fontFamily:"var(--font-m)", fontSize:12, color:"var(--muted)", marginBottom:14 }}>
-            Ready to move to {phaseLabel(nextPhase(meso.phase)).toLowerCase()}?
+            Ready to move to {phaseLabel(nextPhase(meso.phase, meso.lastBlock)).toLowerCase()}?
           </div>
           <div style={{ display:"flex", gap:10 }}>
             <button style={{ ...S.btnOutline, flex:1 }}
@@ -2895,13 +3163,18 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
               onClick={() => setData(d => ({
                 ...d,
                 mesocycle: {
-                  phase: nextPhase(d.mesocycle?.phase || "accumulation"),
+                  phase: nextPhase(d.mesocycle?.phase || "accumulation", d.mesocycle?.lastBlock),
                   sessionCount: 0,
                   startDate: new Date().toISOString().slice(0,10),
                   pendingTransition: false,
+                  // Remember the working block a deload follows, so the cycle
+                  // alternates accumulation and intensification around it.
+                  lastBlock: (d.mesocycle?.phase || "accumulation") === "deload"
+                    ? d.mesocycle?.lastBlock
+                    : (d.mesocycle?.phase || "accumulation"),
                 }
               }))}>
-              Start {phaseLabel(nextPhase(meso.phase)).toLowerCase()} →
+              Start {phaseLabel(nextPhase(meso.phase, meso.lastBlock)).toLowerCase()} →
             </button>
           </div>
         </div>
@@ -2909,6 +3182,39 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
       {/* AI Coach Full Analysis */}
       <AiAnalysisPanel loading={aiSummaryLoading} raw={aiSummary} onGoToChat={onGoToChat} day={day}
         proposalState={{ applied: appliedProposals, dismissed: dismissedProposals, onApply: applyAiProposal, onDismiss: dismissAiProposal }} />
+
+      {/* Mobility tail. The stretch module — 31 exercises written for the
+          kyphosis and the disc — had never once been logged: 0 of 43 sessions.
+          A separate mobility day competes with the decision to go to the gym at
+          all; six minutes at the end of a session already finished does not. */}
+      {!stretchSkipped && (() => {
+        // saveSession has already unshifted this session onto history, so the
+        // routine is picked from the day just finished.
+        const focus = suggestStretchFocus(data.history || []);
+        const routine = STRETCH_ROUTINES[focus];
+        if (!routine) return null;
+        return (
+          <div style={{ ...S.card, border:`1px solid ${routine.color}`, marginTop:12,
+            animation:"fadeUp .25s cubic-bezier(0.16,1,0.3,1) both" }}>
+            <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", letterSpacing:1 }}>
+              FINISH THE SESSION
+            </div>
+            <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:18, color:routine.color, marginTop:4 }}>
+              {routine.label} · 6 min
+            </div>
+            <div style={{ fontFamily:"var(--font-b)", fontSize:13, color:"var(--muted)", marginTop:4, marginBottom:12 }}>
+              {routine.desc}
+            </div>
+            <div style={{ display:"flex", gap:10 }}>
+              <button style={{ ...S.btnOutline, flex:1 }} onClick={() => setStretchSkipped(true)}>Skip</button>
+              <button style={{ ...S.btn, flex:2, justifyContent:"center" }}
+                onClick={() => setData(d => ({ ...d, activeDay:"Stretch", stretchStartMinutes:6 }))}>
+                Start {routine.label.toLowerCase()} →
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       <button style={{ ...S.btn, width:"100%", justifyContent:"center", marginTop:12 }} onClick={() => setFinished(false)}>Back to Workout</button>
     </div>
@@ -2946,7 +3252,7 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
         </div>
       )}
 
-      {isWeights && isDeload && <div style={{ ...S.warn, marginBottom:8 }}>DELOAD WEEK — Same weights, 2 sets only, RIR 3-4. Recovery first.</div>}
+      {isWeights && isDeload && <div style={{ ...S.warn, marginBottom:8 }}>DELOAD SESSION — Same weights, two-thirds the sets, stop at RIR 4. Recovery first.</div>}
       {warnings.map((w,i) => <div key={i} style={{ ...S.warn, marginBottom:6 }}>{w}</div>)}
 
       {trends.length > 0 && (
@@ -3026,7 +3332,7 @@ ${data.level==="Beginner"?"IMPORTANT: Beginner - keep RIR 3+ (never go to failur
 Training ${data.days} days/week. Split: ${(data.split||[]).join("/")}.
 Recent sessions: ${(data.history||[]).slice(0,4).map(h=>`${h.date} ${h.day} ${(h.volume||0).toFixed(0)}kg rating:${h.rating||"?"}`).join("; ")||"none yet"}.
 Body weight: ${(data.bodyWeightHistory||[]).slice(0,3).map(b=>`${b.date}:${b.weight}kg`).join(", ")||"not tracked"}.
-Deload needed: ${shouldDeload(data.history)?"YES":"no"}.
+Deload needed: ${shouldDeload(data.history, data.weight)?"YES":"no"}.
 Be concise (under 200 words), practical, personalized.`;
 
   const send = async (text) => {
@@ -3130,7 +3436,7 @@ function HistoryScreen({ data }) {
         </div>
       )}
 
-      {shouldDeload(history) && <div style={{ ...S.warn, marginBottom: 10 }}>DELOAD DUE - Plan a lighter week</div>}
+      {shouldDeload(history, data?.weight) && <div style={{ ...S.warn, marginBottom: 10 }}>DELOAD DUE - Plan a lighter week</div>}
 
       {history.length === 0 ? (
         <div style={{ ...S.card, textAlign: "center", padding: 36, color: "var(--muted)" }}>
@@ -3210,6 +3516,12 @@ function HistoryScreen({ data }) {
 
 // ── Technique Library (static, instant) ──────────────────────────────────────
 const TECHNIQUE = {
+  "Single-Arm Dumbbell Row": {
+    setup:    "One hand and the same-side knee on the bench, back flat and parallel to the floor, other foot planted wide for balance.",
+    movement: "Drive the elbow up and back toward the hip, letting the shoulder blade travel with it, then lower under control to a full stretch.",
+    feel:     "The lat and mid-back doing the pulling, with the supported spine staying completely still.",
+    mistake:  "Twisting the torso to heave the weight up — the supporting hand is there so the lower back takes nothing; keep the shoulders square.",
+  },
   "Push-Up": {
     setup:    "Hands under the shoulders, body in a straight line from head to heels, core braced.",
     movement: "Lower the chest to about 1cm from the floor with elbows at 45°, then exhale and press back up.",
@@ -3804,7 +4116,8 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
       if (avgRIR <= 1) targetReps = Math.max(1, avgReps - 2);
       else if (avgRIR <= 3) targetReps = avgReps + 1;
       else targetReps = avgReps + 3;
-      plan[exName] = { targetReps, targetRIR: parseFloat(avgRIR.toFixed(1)), source: "rir", type: "reps" };
+      plan[exName] = { targetReps, targetRIR: TARGET_RIR,
+        lastRIR: parseFloat(avgRIR.toFixed(1)), source: "rir", type: "reps" };
       return;
     }
 
@@ -3816,10 +4129,15 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
 
     let targetWeight = currentWeight;
 
-    // Rep threshold: only increase weight when avgReps >= midpoint of range (10 for 8-12)
-    // This lets reps climb first before adding load — prevents premature weight jumps
-    const repMidpoint = 10; // midpoint of 8-12 hypertrophy range
-    const repsReadyForIncrease = avgReps >= repMidpoint;
+    // Rep threshold: add load only once reps have climbed to the top of THIS
+    // exercise's range. It used to be a flat 10 for everything, which is the
+    // midpoint of 8-12 and above the top of every 6-8 range in the DB — so an
+    // 8-rep compound could never satisfy it. Deadlift sat at 74kg x 8 @ RIR 2
+    // for eight consecutive sessions and squat at 84kg x 8 for six: the gate
+    // never opened, and the plan handed back the same reps it had just seen,
+    // so neither half of double progression could move.
+    const repCeiling = repRangeTop(exName, goal);
+    const repsReadyForIncrease = avgReps >= repCeiling;
 
     if (isDumbbellEx(exName)) {
       if (avgRIR <= 1) targetWeight = stepDB(currentWeight, -1);
@@ -3845,10 +4163,22 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
       targetWeight = Math.min(targetWeight, dipMax);
     }
 
+    // Double progression, both halves. Weight moved -> reset to the bottom of
+    // the range. Weight held because reps were short -> ask for one more rep.
+    // Previously this returned `avgReps` unconditionally, i.e. "do exactly what
+    // you just did", which is why the stalls above never resolved themselves.
+    const repFloor = repRangeBottom(exName, goal);
+    let targetReps;
+    if (targetWeight > currentWeight)      targetReps = repFloor;
+    else if (targetWeight < currentWeight) targetReps = avgReps;
+    else if (avgRIR <= 1)                  targetReps = avgReps;
+    else                                   targetReps = Math.min(avgReps + 1, repCeiling);
+
     plan[exName] = {
       targetWeight: parseFloat(targetWeight.toFixed(1)),
-      targetReps: avgReps,
-      targetRIR: parseFloat(avgRIR.toFixed(1)),
+      targetReps,
+      targetRIR: TARGET_RIR,
+      lastRIR: parseFloat(avgRIR.toFixed(1)),
       source: "rir",
       type: "weight",
     };
@@ -3928,7 +4258,8 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
           return { weight: p.targetWeight.toFixed(1), reps: rr.reps,
             source: p.source === "ai_proposal" ? "ai_planned" : "planned",
             oneRM: calc1RM(p.targetWeight, p.targetReps),
-            planRIR: p.source === "ai_proposal" ? undefined : p.targetRIR };
+            planRIR: p.source === "ai_proposal" ? undefined : (p.lastRIR ?? p.targetRIR),
+            planTargetRIR: p.source === "ai_proposal" ? undefined : (p.lastRIR != null ? p.targetRIR : undefined) };
         if (p.type === "reps")
           return { weight: null, reps: String(p.targetReps), oneRM: null,
             source: p.source === "ai_proposal" ? "ai_planned" : "planned" };
@@ -4293,7 +4624,7 @@ function StatsScreen({ data }) {
       const weekStart = new Date(d); weekStart.setDate(d.getDate() - d.getDay());
       const wk = weekStart.toISOString().slice(0,10);
       if (!weeks[wk]) weeks[wk] = { week: wk, volume: 0, sessions: 0 };
-      weeks[wk].volume += h.volume || 0;
+      weeks[wk].volume += sessionVolume(h, data?.weight);
       weeks[wk].sessions++;
     });
     return Object.values(weeks).sort((a,b) => a.week.localeCompare(b.week)).slice(-8);
@@ -4807,7 +5138,7 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
   // ── Stats computations ─────────────────────────────────────────────────────
   const meso = initMesocycle(data.mesocycle);
   const phaseLen = PHASE_LENGTHS[meso.phase] || 12;
-  const weeklyVols = useMemo(() => getWeeklyVolumes(history), [history]);
+  const weeklyVols = useMemo(() => getWeeklyVolumes(history, 6, data?.weight), [history, data?.weight]);
   const thisWeekVol = weeklyVols[weeklyVols.length - 1]?.vol || 0;
   const lastWeekVol = weeklyVols[weeklyVols.length - 2]?.vol || 0;
   const volDelta = lastWeekVol > 100 ? Math.round((thisWeekVol - lastWeekVol) / lastWeekVol * 100) : null;
@@ -5167,7 +5498,7 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
         <button
           style={{ ...S.btnSm, width:"100%", justifyContent:"center", marginTop:8,
             color:"var(--green)", border:"1px solid rgba(34,197,94,0.35)", background:"rgba(34,197,94,0.06)" }}
-          onClick={() => { setData(d => ({ ...d, activeDay:"Stretch" })); onStartSession(); }}>
+          onClick={() => { setData(d => ({ ...d, activeDay:"Stretch", stretchStartMinutes:null })); onStartSession(); }}>
           🧘 Quick Stretch (10–20 min)
         </button>
       </div>

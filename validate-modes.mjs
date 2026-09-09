@@ -125,13 +125,28 @@ eq("bw plan carries no targetWeight", Object.values(bwPlan.plan).some(p=>"target
 const trxPlan = T.calcNextSessionPlan("Push", trxSess.log, "hypertrophy", {...DATA, activeMode:"trx"});
 eq("trx plan entries are all type 'reps'", [...new Set(Object.values(trxPlan.plan).map(p=>p.type))], ["reps"]);
 
-// ── Test 6: the weights progression rule is unchanged ─────────────────────────
-console.log("\n📋 TEST 6: Weights Progression Rule (avgReps >= 10 AND RIR <= 3)");
-const w = (log) => T.calcNextSessionPlan("Push", log, "hypertrophy", {...DATA, activeMode:"weights"}).plan["Barbell Bench Press"].targetWeight;
-eq("60kg, avgReps 10, RIR 2 → +5kg", w(weightsSess.log), 65);
-eq("60kg, avgReps 8, RIR 2 → held (reps climb first)", w({"Barbell Bench Press":[{weight:"60",reps:"8",rpe:"2"},{weight:"60",reps:"8",rpe:"2"}]}), 60);
-eq("60kg, RIR 5 → +10kg regardless of reps", w({"Barbell Bench Press":[{weight:"60",reps:"8",rpe:"5"}]}), 70);
-eq("60kg, RIR 0 → -5kg", w({"Barbell Bench Press":[{weight:"60",reps:"12",rpe:"0"}]}), 55);
+// ── Test 6: double progression, both halves ───────────────────────────────────
+// The gate used to be a flat avgReps >= 10 for every exercise, and the plan
+// handed back targetReps: avgReps — so an 8-rep lift at RIR 2 got the same
+// weight AND the same reps forever. Both halves are asserted here now.
+console.log("\n📋 TEST 6: Double Progression (reps to the top of the range, then load)");
+const plan6 = (log) => T.calcNextSessionPlan("Push", log, "hypertrophy", {...DATA, activeMode:"weights"}).plan["Barbell Bench Press"];
+const w  = (log) => plan6(log).targetWeight;
+const rp = (log) => plan6(log).targetReps;
+const at = (reps, rir) => ({"Barbell Bench Press":[{weight:"60",reps:String(reps),rpe:String(rir)},{weight:"60",reps:String(reps),rpe:String(rir)}]});
+
+// Bench sits in the 8-12 hypertrophy range, so the load moves at 12, not at 10.
+eq("60kg, avgReps 8, RIR 2 → held at 60", w(at(8,2)), 60);
+eq("...and asks for one more rep", rp(at(8,2)), 9);
+eq("60kg, avgReps 10, RIR 2 → still held (below top of range)", w(at(10,2)), 60);
+eq("...and asks for one more rep", rp(at(10,2)), 11);
+eq("60kg, avgReps 12, RIR 2 → top of range reached, +5kg", w(at(12,2)), 65);
+eq("...and reps reset to the bottom of the range", rp(at(12,2)), 8);
+eq("60kg, RIR 5 → +10kg regardless of reps", w(at(8,5)), 70);
+eq("60kg, RIR 0 → -5kg", w(at(12,0)), 55);
+eq("...and reps are not also pushed up when backing off", rp(at(12,0)), 12);
+eq("target RIR is the prescription, not last session's", plan6(at(10,2)).targetRIR, 2);
+eq("last session's RIR is kept separately", plan6(at(10,2)).lastRIR, 2);
 
 // ── Test 7: the invariant ─────────────────────────────────────────────────────
 console.log("\n📋 TEST 7: A TRX/BW Plan Cannot Re-Target A Weights Exercise");
