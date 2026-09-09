@@ -5636,6 +5636,22 @@ export default function App() {
         base.mesocycle = { phase: "deload", sessionCount: 0, startDate: "2026-05-24", pendingTransition: false };
         base._mesocycleDeloadV1 = true;
       }
+      // One-time: SPLITS[3] changed from Push/Pull/Legs to the Full Body A/B/C
+      // rotation. `data.split` is the source of truth everywhere in the app, and
+      // the only thing that ever recomputes it from SPLITS is a mount effect in
+      // ScheduleScreen — which an existing user never reaches, because onboarding
+      // jumps straight to step 3 once a split is stored. Without this migration a
+      // returning user keeps Push/Pull/Legs forever and never sees the new split.
+      if (!base._fullBodyRotationV1) {
+        const _days = Math.min(parseInt(base.days) || 3, 7);
+        base.split = SPLITS[_days] || SPLITS[3];
+        // activeDay may still name a day that is no longer in the split. The
+        // rotation self-heals (indexOf returns -1, so it falls back to split[0]),
+        // but leaving a stale day selected is confusing on the home screen.
+        if (base.activeDay && base.activeDay !== "Stretch" && !base.split.includes(base.activeDay))
+          base.activeDay = null;
+        base._fullBodyRotationV1 = true;
+      }
       return base;
     } catch {
       return { ...PREFILLED_DATA, profileBaseline: { ...USER_BASELINE }, history: [...RECOVERED_SESSIONS] };
