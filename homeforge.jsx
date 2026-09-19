@@ -2005,7 +2005,7 @@ function ScheduleScreen({ data, setData, onNext }) {
 }
 
 // ── Exercise Card ─────────────────────────────────────────────────────────────
-function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLog, history }) {
+function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLog, history, priorNames }) {
   const [expanded, setExpanded] = useState(false);
   const [showDesc, setShowDesc] = useState(false);
   const [tip, setTip] = useState("");
@@ -2025,9 +2025,13 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const key = activeEx.name;
 
   // Exercise type flags — needed for weight display labels
-  const isDipBelt = ["Weighted Dip","Weighted Pull-Up","Weighted Chin-Up","Weighted Push-Up"].includes(key);
-  const isBarbell = ["Barbell Bench Press","Barbell Squat","Barbell Deadlift","Barbell Row","Overhead Press","Romanian Deadlift","Close-Grip Bench Press"].includes(key);
-  const isEZ     = ["EZ Bar Curl","EZ Bar Skull Crusher","EZ Bar Reverse Curl","EZ Bar Upright Row"].includes(key);
+  // isDumbbell was referenced by the warm-up builder but never declared, so the
+  // ReferenceError was swallowed by its try/catch and dumbbell lifts got no warm-up.
+  const loadType   = loadTypeOf(key);
+  const isDipBelt  = loadType === "dipbelt";
+  const isBarbell  = loadType === "barbell";
+  const isEZ       = loadType === "ezbar";
+  const isDumbbell = loadType === "dumbbell";
 
   const _meso    = initMesocycle(data.mesocycle);
   const _isDeload   = _meso.phase === "deload";
@@ -2037,8 +2041,8 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const numSets = (isTimed || repOverride) ? effectiveSets
     : _isDeload ? Math.max(2, Math.round(rr.sets * 2 / 3)) : rr.sets;
   const suggestion = useMemo(
-    () => getSmartSuggestion(key, goal, history, data.profileBaseline, data),
-    [key, goal, history, data.profileBaseline, data.nextSession, data.activeMode, data.barWeight, data.barbellPlates, data.ezbarWeight, data.ezbarPlates, data.dumbbellMax]
+    () => getSmartSuggestion(key, goal, history, data.profileBaseline, data, priorNames),
+    [key, goal, history, data.profileBaseline, data.nextSession, data.activeMode, data.barWeight, data.barbellPlates, data.ezbarWeight, data.ezbarPlates, data.dumbbellMax, data.dumbbellWeights, data.dipbeltMax, priorNames]
   );
   // A rep-target plan (bodyweight / TRX / reps-only progression) beats the
   // static rep range — that is how those modes actually progress.
@@ -2264,6 +2268,19 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
         {!isTimed && suggestion?.source === "intensification" && (
           <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--amber)", marginTop:2 }}>
             💪 Intensification — {suggestion.intensificationNote}
+          </div>
+        )}
+        {!isTimed && suggestion?.fatigue && (
+          <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--amber)", marginTop:2 }}>
+            {suggestion.fatigue.pct > 0
+              ? `−${suggestion.fatigue.pct}% pre-fatigue after ${suggestion.fatigue.by.join(", ")}`
+              : `+${-suggestion.fatigue.pct}% — fresher than when last logged`}
+            <span style={{ color:"var(--muted)" }}> · from {suggestion.fatigue.from}kg</span>
+          </div>
+        )}
+        {!isTimed && suggestion?.cappedFrom && (
+          <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--blue)", marginTop:2 }}>
+            heaviest dumbbell ({suggestion.weight}kg) — progress by reps, not load
           </div>
         )}
         {!isTimed && suggestion?.source === "estimated" && (
@@ -3001,6 +3018,13 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
       });
   }, [day, mode, isWeights, data.equipment, data.goal, data.favourites, data.level, data.sessionOverride]);
 
+  // What each card follows in today's order — drives the pre-fatigue correction.
+  // Memoised so the cards' suggestion memo is not invalidated on every render.
+  const priorByIndex = useMemo(
+    () => exercises.map((_, i) => exercises.slice(0, i).map(e => e.name)),
+    [exercises]
+  );
+
   // Cards read history for their own mode: "last session" comparisons and rep
   // progression stay inside the mode, and loaded bests stay out of TRX/BW.
   const modeHistory = useMemo(() => historyForMode(data.history, mode), [data.history, mode]);
@@ -3305,7 +3329,7 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
       {exercises.length === 0 ? (
         <div style={{ ...S.card, textAlign:"center", padding:28, color:"var(--muted)" }}>No exercises match your equipment.</div>
       ) : exercises.map((ex,i) => (
-        <ExerciseCard key={`${mode}-${ex.name}-${i}`} ex={ex} exNum={i+1} totalEx={exercises.length} goal={data.goal} data={data} sessionLog={sessionLog} setSessionLog={setSessionLog} history={modeHistory} />
+        <ExerciseCard key={`${mode}-${ex.name}-${i}`} ex={ex} exNum={i+1} totalEx={exercises.length} goal={data.goal} data={data} sessionLog={sessionLog} setSessionLog={setSessionLog} history={modeHistory} priorNames={priorByIndex[i]} />
       ))}
 
       <div style={{ ...S.card, marginTop:16 }}>
@@ -4008,6 +4032,136 @@ const TECHNIQUE = {
   },
 };
 
+// ── Load type — one list per implement ───────────────────────────────────────
+// These used to be re-declared in four places and had drifted: Bulgarian Split
+// Squat and Lunge were dumbbell lifts to the RIR planner but not to the
+// suggestion engine, so their log-based target was neither capped at the
+// heaviest dumbbell nor snapped to a real one (24kg x 12 came back as 28.3kg).
+const DUMBBELL_EX = ["Dumbbell Bench Press","Dumbbell Shoulder Press","Dumbbell Row","Dumbbell Curl",
+  "Single-Arm Dumbbell Row","Dumbbell Fly","Goblet Squat","Single-Leg RDL","Tricep Overhead Ext",
+  "Clean & Press","Single-Arm DB Press","Bulgarian Split Squat","Lunge"];
+const BARBELL_EX  = ["Barbell Bench Press","Barbell Squat","Barbell Deadlift","Barbell Row",
+  "Overhead Press","Romanian Deadlift"];
+const EZ_EX       = ["EZ Bar Curl","EZ Bar Skull Crusher","EZ Bar Reverse Curl","EZ Bar Upright Row",
+  "Close-Grip Bench Press"];
+const DIPBELT_EX  = ["Weighted Dip","Weighted Pull-Up","Weighted Chin-Up","Weighted Push-Up"];
+
+function loadTypeOf(exName) {
+  if (DUMBBELL_EX.includes(exName)) return "dumbbell";
+  if (BARBELL_EX.includes(exName))  return "barbell";
+  if (EZ_EX.includes(exName))       return "ezbar";
+  if (DIPBELT_EX.includes(exName))  return "dipbelt";
+  return "bw";
+}
+
+// The dumbbells actually on the rack, ascending, never above dumbbellMax.
+function dumbbellSteps(data) {
+  const max = parseFloat(data?.dumbbellMax) || Infinity;
+  return (data?.dumbbellWeights || "").split(",").map(v => parseFloat(v.trim()))
+    .filter(v => v > 0 && v <= max).sort((a, b) => a - b);
+}
+
+// Clamp a load to something the home gym can build: a dumbbell that exists, a
+// plate combination that exists, a belt load under the belt's max.
+function fitToInventory(exName, w, data) {
+  if (!(w > 0)) return w;
+  const type = loadTypeOf(exName);
+  if (type === "dumbbell") {
+    const steps = dumbbellSteps(data);
+    if (!steps.length) return Math.min(w, parseFloat(data?.dumbbellMax) || 24);
+    return steps.reduce((p, c) => Math.abs(c - w) < Math.abs(p - w) ? c : p);
+  }
+  if (type === "barbell")
+    return calcPlates(Math.min(w, parseFloat(data?.barbellMax) || 119), data?.barWeight || "14", data?.barbellPlates).total;
+  if (type === "ezbar")
+    return calcPlates(Math.min(w, parseFloat(data?.ezbarMax) || 113), data?.ezbarWeight || "8", data?.ezbarPlates).total;
+  if (type === "dipbelt")
+    return Math.round(Math.min(w, parseFloat(data?.dipbeltMax) || 20) / 2.5) * 2.5;
+  return w;
+}
+
+// ── Pre-fatigue — the same muscle already worked earlier in the session ──────
+// primary = prime movers, secondary = meaningful synergists. Only lifts that
+// carry a load matter here: bands and bodyweight moves have no weight to adjust,
+// but they still count as the thing that did the fatiguing.
+const MOVERS = {
+  "Barbell Bench Press":     { p:["chest","frontDelt"],         s:["triceps"] },
+  "Dumbbell Bench Press":    { p:["chest","frontDelt"],         s:["triceps"] },
+  "Close-Grip Bench Press":  { p:["triceps","chest"],           s:["frontDelt"] },
+  "Single-Arm DB Press":     { p:["chest","frontDelt"],         s:["triceps"] },
+  "Dumbbell Fly":            { p:["chest"],                     s:["frontDelt"] },
+  "Push-Up":                 { p:["chest"],                     s:["frontDelt","triceps"] },
+  "Weighted Push-Up":        { p:["chest"],                     s:["frontDelt","triceps"] },
+  "Weighted Dip":            { p:["chest","triceps"],           s:["frontDelt"] },
+  "Tricep Dips":             { p:["triceps"],                   s:["chest","frontDelt"] },
+  "Overhead Press":          { p:["frontDelt"],                 s:["triceps"] },
+  "Dumbbell Shoulder Press": { p:["frontDelt"],                 s:["triceps"] },
+  "Pike Push-Up":            { p:["frontDelt"],                 s:["triceps"] },
+  "EZ Bar Skull Crusher":    { p:["triceps"],                   s:[] },
+  "Tricep Overhead Ext":     { p:["triceps"],                   s:[] },
+  "EZ Bar Upright Row":      { p:["sideDelt"],                  s:["upperBack"] },
+  "Pull-Up":                 { p:["lats"],                      s:["biceps","upperBack"] },
+  "Assisted Pull-Up":        { p:["lats"],                      s:["biceps","upperBack"] },
+  "Weighted Pull-Up":        { p:["lats"],                      s:["biceps","upperBack"] },
+  "Neutral Grip Pull-Up":    { p:["lats"],                      s:["biceps","upperBack"] },
+  "Chin-Up":                 { p:["lats","biceps"],             s:["upperBack"] },
+  "Weighted Chin-Up":        { p:["lats","biceps"],             s:["upperBack"] },
+  "Inverted Row":            { p:["upperBack","lats"],          s:["biceps","rearDelt"] },
+  "Dumbbell Row":            { p:["lats","upperBack"],          s:["biceps","rearDelt"] },
+  "Single-Arm Dumbbell Row": { p:["lats","upperBack"],          s:["biceps","rearDelt"] },
+  "Barbell Row":             { p:["lats","upperBack"],          s:["biceps","rearDelt","lowerBack"] },
+  "Face Pull":               { p:["rearDelt","upperBack"],      s:[] },
+  "Band Pull-Apart":         { p:["rearDelt","upperBack"],      s:[] },
+  "EZ Bar Curl":             { p:["biceps"],                    s:[] },
+  "Dumbbell Curl":           { p:["biceps"],                    s:[] },
+  "EZ Bar Reverse Curl":     { p:["biceps"],                    s:[] },
+  "Barbell Squat":           { p:["quads","glutes"],            s:["lowerBack"] },
+  "Goblet Squat":            { p:["quads","glutes"],            s:[] },
+  "Squat":                   { p:["quads","glutes"],            s:[] },
+  "Bulgarian Split Squat":   { p:["quads","glutes"],            s:[] },
+  "Lunge":                   { p:["quads","glutes"],            s:[] },
+  "Barbell Deadlift":        { p:["hamstrings","glutes","lowerBack"], s:["quads","upperBack"] },
+  "Romanian Deadlift":       { p:["hamstrings","glutes"],       s:["lowerBack"] },
+  "Single-Leg RDL":          { p:["hamstrings","glutes"],       s:[] },
+};
+// Load lost per earlier exercise that shares a prime mover with this one:
+// ~10% when it was a prime mover there too, ~5% when it was only a synergist.
+// Capped so three pressing movements in a row cannot halve the fourth.
+const FATIGUE_PRIMARY = 0.10, FATIGUE_SECONDARY = 0.05, FATIGUE_CAP = 0.20;
+
+// Fraction of fresh strength lost to what came before `exName` in the session.
+// Returns the discount and the exercises responsible, for the card to explain.
+function preFatigue(exName, priorNames) {
+  const me = MOVERS[exName];
+  if (!me || !priorNames?.length) return { pct: 0, by: [] };
+  let pct = 0; const by = [];
+  priorNames.forEach(n => {
+    const o = MOVERS[n];
+    if (!o || n === exName) return;
+    const hit = me.p.some(m => o.p.includes(m)) ? FATIGUE_PRIMARY
+              : me.p.some(m => o.s.includes(m)) ? FATIGUE_SECONDARY : 0;
+    if (hit) { pct += hit; by.push(n); }
+  });
+  return { pct: Math.min(pct, FATIGUE_CAP), by };
+}
+
+// What came before `exName` in a logged session. Log keys are written in the
+// order the sets were entered, which is the order the session was performed.
+function priorInLog(exName, log) {
+  const keys = Object.keys(log || {});
+  const i = keys.indexOf(exName);
+  return i > 0 ? keys.slice(0, i) : [];
+}
+
+// Pre-fatigue of the most recent logged session where `exName` was lifted at
+// `weight` — i.e. the context the reference number was actually produced in.
+function loggedFatigue(exName, weight, history) {
+  const w = parseFloat(weight);
+  const hit = weightsHistory(history).find(h =>
+    (h.log?.[exName] || []).some(s => parseFloat(s.weight) === w));
+  return hit ? preFatigue(exName, priorInLog(exName, hit.log)).pct : 0;
+}
+
 // ── 1RM & cross-exercise estimation ──────────────────────────────────────────
 function calc1RM(weight, reps) {
   const w = parseFloat(weight), r = parseInt(reps);
@@ -4056,7 +4210,7 @@ function getDayType(day) {
   if (day === "Push")  return "push";
   if (day === "Pull")  return "pull";
   if (day === "Legs")  return "legs";
-  if (day === "Full Body" || day === "Full Body A" || day === "Full Body B") return "fullbody";
+  if (day === "Full Body" || day === "Full Body A" || day === "Full Body B" || day === "Full Body C") return "fullbody";
   if (day === "Upper A" || day === "Upper B" || day === "Upper") return "upper";
   if (day === "Lower A" || day === "Lower B") return "lower";
   if (day === "Chest") return "chest";
@@ -4074,19 +4228,13 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
   // is always a rep target, never a load change.
   const repsOnlyMode = !isWeightsMode(data?.activeMode);
 
-  const isDumbbellEx = (name) => ["Dumbbell Bench Press","Dumbbell Shoulder Press","Dumbbell Row",
-    "Dumbbell Curl","Single-Arm Dumbbell Row","Dumbbell Fly","Goblet Squat","Single-Leg RDL",
-    "Tricep Overhead Ext","Clean & Press","Single-Arm DB Press",
-    "Bulgarian Split Squat","Lunge"].includes(name);
-  const isBarbellEx = (name) => ["Barbell Bench Press","Barbell Squat","Barbell Deadlift",
-    "Barbell Row","Overhead Press","Close-Grip Bench Press","Romanian Deadlift"].includes(name);
-  const isEZEx = (name) => ["EZ Bar Curl","EZ Bar Skull Crusher","EZ Bar Reverse Curl",
-    "EZ Bar Upright Row"].includes(name);
-  const isDipBeltEx = (name) => ["Weighted Dip","Weighted Pull-Up","Weighted Chin-Up","Weighted Push-Up"].includes(name);
-  const isBodyweightEx = (name) => !isDumbbellEx(name) && !isBarbellEx(name) && !isEZEx(name) && !isDipBeltEx(name);
+  const isDumbbellEx   = (name) => loadTypeOf(name) === "dumbbell";
+  const isBarbellEx    = (name) => loadTypeOf(name) === "barbell";
+  const isEZEx         = (name) => loadTypeOf(name) === "ezbar";
+  const isDipBeltEx    = (name) => loadTypeOf(name) === "dipbelt";
+  const isBodyweightEx = (name) => loadTypeOf(name) === "bw";
 
-  const dbSteps = (data.dumbbellWeights || "")
-    .split(",").map(v => parseFloat(v.trim())).filter(Boolean).sort((a, b) => a - b);
+  const dbSteps = dumbbellSteps(data);
 
   const snapToDB = (w) => {
     if (!dbSteps.length) return w;
@@ -4197,27 +4345,57 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
       lastRIR: parseFloat(avgRIR.toFixed(1)),
       source: "rir",
       type: "weight",
+      // How pre-fatigued this lift was when the RIR above was earned, so a plan
+      // made in one slot can be re-scaled if the lift lands in another.
+      fatigue: preFatigue(exName, priorInLog(exName, sessionLog)).pct,
     };
   });
 
   return { dayType, plan };
 }
-// Public entry point. Every suggestion is rounded to a load the plates on hand
-// can actually build, so TODAY'S TARGET, the pre-filled set input and the plate
-// breakdown underneath it always quote the same number. Without this the card
-// showed the achievable 84.0kg while the input pre-filled the raw target 86.0kg.
-function getSmartSuggestion(exName, goal, history, profileBaseline, data) {
+// Public entry point. Every suggestion is rounded to a load the gym can actually
+// build, so TODAY'S TARGET, the pre-filled set input and the plate breakdown
+// underneath it always quote the same number. Without this the card showed the
+// achievable 84.0kg while the input pre-filled the raw target 86.0kg — and a
+// dumbbell target could come back as a 28.3kg dumbbell that does not exist.
+//
+// `priorNames` (the exercises before this one today) turns on the pre-fatigue
+// correction. The reference load is first normalised to the fatigue it was
+// earned under, then re-scaled to today's slot: dumbbell press logged fresh and
+// now placed after the bench comes down ~10%, while a press that was already
+// logged after the bench stays put — its RIR had the fatigue baked in, and
+// discounting it again every session would stall the progression.
+function getSmartSuggestion(exName, goal, history, profileBaseline, data, priorNames) {
   const s = getSmartSuggestionRaw(exName, goal, history, profileBaseline, data);
   if (!s || !s.weight) return s;
-  const raw  = parseFloat(s.weight);
-  const disp = formatWeightDisplay(exName, s.weight, data);
-  // Only bar-loaded lifts are plate-constrained; dumbbells are snapped upstream.
-  if (!raw || !disp || (disp.type !== "barbell" && disp.type !== "ezbar")) return s;
-  const snapped = parseFloat(disp.total);
-  if (!snapped || Math.abs(snapped - raw) < 0.05) return s;
-  // 1RM is linear in load under Epley, so scale rather than recompute.
-  return { ...s, weight: snapped.toFixed(1), snappedFrom: raw.toFixed(1),
-           oneRM: s.oneRM ? Math.round(s.oneRM * snapped / raw) : s.oneRM };
+  const raw = parseFloat(s.weight);
+  if (!raw) return s;
+
+  let target = raw, fatigue;
+  if (priorNames) {
+    const today = preFatigue(exName, priorNames);
+    const ref   = s.refFatigue;
+    if (ref !== undefined && Math.abs(today.pct - ref) > 0.001) {
+      target = raw * (1 - today.pct) / (1 - ref);
+      fatigue = { pct: Math.round((today.pct - ref) * 100), by: today.by, from: raw.toFixed(1) };
+    }
+  }
+
+  const fitted = fitToInventory(exName, target, data);
+  const out = { ...s, weight: fitted.toFixed(1) };
+  if (fatigue) out.fatigue = fatigue;
+  const type = loadTypeOf(exName);
+  if (Math.abs(fitted - target) >= 0.05) {
+    if (type === "barbell" || type === "ezbar") {
+      out.snappedFrom = target.toFixed(1);
+      // 1RM is linear in load under Epley, so scale rather than recompute.
+      if (s.oneRM && !fatigue) out.oneRM = Math.round(s.oneRM * fitted / raw);
+    } else if (type === "dumbbell" && target > fitted && fitted === dumbbellSteps(data).at(-1)) {
+      // Heaviest dumbbell on the rack: load cannot go up, so reps must.
+      out.cappedFrom = target.toFixed(1);
+    }
+  }
+  return out;
 }
 
 function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
@@ -4226,17 +4404,15 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
   const dbMax = parseFloat(data?.dumbbellMax) || 24;
   const barbellMax = parseFloat(data?.barbellMax) || 119;
   const ezMax = parseFloat(data?.ezbarMax) || 113;
-  const dipMax = parseFloat(data?.dipbeltMax) || 30;
+  const dipMax = parseFloat(data?.dipbeltMax) || 20;
 
   // Determine weight cap for this exercise
-  const isDumbbell = ["Dumbbell Bench Press","Dumbbell Shoulder Press","Dumbbell Row","Dumbbell Curl",
-    "Single-Arm Dumbbell Row","Dumbbell Fly","Goblet Squat","Single-Leg RDL",
-    "Tricep Overhead Ext","Clean & Press","Single-Arm DB Press"].includes(exName);
-  const isBarbell = ["Barbell Bench Press","Barbell Squat","Barbell Deadlift","Barbell Row",
-    "Overhead Press","Romanian Deadlift","Close-Grip Bench Press"].includes(exName);
-  const isEZ = ["EZ Bar Curl","EZ Bar Skull Crusher","EZ Bar Reverse Curl","EZ Bar Upright Row","Close-Grip Bench Press"].includes(exName);
-  const isDipBelt = ["Weighted Dip","Weighted Pull-Up","Weighted Chin-Up","Weighted Push-Up"].includes(exName);
-  const isBW = !isDumbbell && !isBarbell && !isEZ && !isDipBelt;
+  const loadType  = loadTypeOf(exName);
+  const isDumbbell = loadType === "dumbbell";
+  const isBarbell  = loadType === "barbell";
+  const isEZ       = loadType === "ezbar";
+  const isDipBelt  = loadType === "dipbelt";
+  const isBW       = loadType === "bw";
 
   const capWeight = (w) => {
     if (isDumbbell) return Math.min(w, dbMax);
@@ -4248,8 +4424,8 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
 
   // Round to nearest available dumbbell if dumbbell exercise
   const snapToDB = (w) => {
-    if (!isDumbbell || !data?.dumbbellWeights) return w;
-    const available = data.dumbbellWeights.split(",").map(v => parseFloat(v.trim())).filter(Boolean).sort((a,b)=>a-b);
+    if (!isDumbbell) return w;
+    const available = dumbbellSteps(data);
     if (!available.length) return w;
     return available.reduce((prev, curr) => Math.abs(curr - w) < Math.abs(prev - w) ? curr : prev);
   };
@@ -4275,7 +4451,9 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
             source: p.source === "ai_proposal" ? "ai_planned" : "planned",
             oneRM: calc1RM(p.targetWeight, p.targetReps),
             planRIR: p.source === "ai_proposal" ? undefined : (p.lastRIR ?? p.targetRIR),
-            planTargetRIR: p.source === "ai_proposal" ? undefined : (p.lastRIR != null ? p.targetRIR : undefined) };
+            planTargetRIR: p.source === "ai_proposal" ? undefined : (p.lastRIR != null ? p.targetRIR : undefined),
+            // Plans saved before pre-fatigue tracking carry no context: leave them unscaled.
+            refFatigue: p.source === "ai_proposal" ? undefined : p.fatigue };
         if (p.type === "reps")
           return { weight: null, reps: String(p.targetReps), oneRM: null,
             source: p.source === "ai_proposal" ? "ai_planned" : "planned" };
@@ -4289,15 +4467,6 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
 
   // Intensification phase — formula-based weight calc
   if (data?.mesocycle?.phase === "intensification") {
-    const isDumbbellEx2 = ["Dumbbell Bench Press","Dumbbell Shoulder Press","Dumbbell Row",
-      "Dumbbell Curl","Single-Arm Dumbbell Row","Dumbbell Fly","Goblet Squat","Single-Leg RDL",
-      "Tricep Overhead Ext","Clean & Press","Single-Arm DB Press",
-      "Bulgarian Split Squat","Lunge"].includes(exName);
-    const isBarbellEx2 = ["Barbell Bench Press","Barbell Squat","Barbell Deadlift",
-      "Barbell Row","Overhead Press","Close-Grip Bench Press","Romanian Deadlift"].includes(exName);
-    const isEZEx2      = ["EZ Bar Curl","EZ Bar Skull Crusher","EZ Bar Reverse Curl",
-      "EZ Bar Upright Row"].includes(exName);
-    const isDipBeltEx2 = ["Weighted Dip","Weighted Pull-Up","Weighted Chin-Up","Weighted Push-Up"].includes(exName);
     const activeDay2   = data.activeDay || "";
     const { weight: bestW, reps: bestR } = getBestFromLastTwoSameDaySessions(
       exName, activeDay2, history, profileBaseline
@@ -4305,23 +4474,11 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
     if (bestW > 0) {
       const oneRM  = calc1RM(bestW, bestR);
       const rawSug = weightForReps(oneRM, 6);
-      const snapToDB2 = (w) => {
-        if (!data?.dumbbellWeights) return w;
-        const av = data.dumbbellWeights.split(",").map(v => parseFloat(v.trim())).filter(Boolean).sort((a,b)=>a-b);
-        return av.length ? av.reduce((p,c) => Math.abs(c-w)<Math.abs(p-w)?c:p) : w;
-      };
-      const snapToBar2 = (w, barW, plts) => {
-        if (!plts) return Math.round(w/2.5)*2.5;
-        return calcPlates(w, barW, plts).total;
-      };
-      let finalW = rawSug;
-      if (isDumbbellEx2)     finalW = Math.min(snapToDB2(rawSug), parseFloat(data?.dumbbellMax)||24);
-      else if (isBarbellEx2) finalW = Math.min(snapToBar2(rawSug, data?.barWeight||"14", data?.barbellPlates), parseFloat(data?.barbellMax)||119);
-      else if (isEZEx2)      finalW = Math.min(snapToBar2(rawSug, data?.ezbarWeight||"8", data?.ezbarPlates), parseFloat(data?.ezbarMax)||113);
-      else if (isDipBeltEx2) finalW = Math.min(Math.round(rawSug/2.5)*2.5, parseFloat(data?.dipbeltMax)||20);
+      const finalW = fitToInventory(exName, rawSug, data);
       return {
         weight: finalW.toFixed(1), reps: "6-8", source: "intensification", oneRM,
         intensificationNote: `from ${bestW}kg x ${bestR} (1RM ~${oneRM}kg)`,
+        refFatigue: loggedFatigue(exName, bestW, history),
       };
     }
   }
@@ -4335,7 +4492,8 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
     const bump = best.reps >= targetReps ? inc : 0;
     const raw = capWeight(suggested + bump);
     const final = isDumbbell ? snapToDB(raw) : raw;
-    return { weight: final.toFixed(1), reps: rr.reps, source: "log", oneRM };
+    return { weight: final.toFixed(1), reps: rr.reps, source: "log", oneRM,
+             refFatigue: loggedFatigue(exName, best.weight, history) };
   }
   // 2. Profile baseline
   const base = profileBaseline?.[exName];
@@ -4343,7 +4501,7 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
     const oneRM = calc1RM(base.weight, base.reps);
     const suggested = capWeight(weightForReps(oneRM, targetReps));
     const final = isDumbbell ? snapToDB(suggested) : suggested;
-    return { weight: final.toFixed(1), reps: rr.reps, source: "baseline", oneRM };
+    return { weight: final.toFixed(1), reps: rr.reps, source: "baseline", oneRM, refFatigue: 0 };
   }
   // 3. Cross-exercise estimate
   const ratio = CROSS_RATIOS[exName];
@@ -4357,7 +4515,7 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
       const est1RM = Math.round(ref1RM * ratio.pct);
       const raw = capWeight(weightForReps(est1RM, targetReps));
       const final = isDumbbell ? snapToDB(raw) : raw;
-      return { weight: final.toFixed(1), reps: rr.reps, source: "estimated", oneRM: est1RM };
+      return { weight: final.toFixed(1), reps: rr.reps, source: "estimated", oneRM: est1RM, refFatigue: 0 };
     }
   }
   // 4. BW exercises — return null weight but show reps

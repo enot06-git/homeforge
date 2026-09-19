@@ -35,6 +35,7 @@ export const __t = {
   getBestFromLastTwoSameDaySessions, getSmartSuggestion, calcNextSessionPlan,
   dedupHistory, detectRecentPR, shouldDeload, reconcileMesocycle, getDayType,
   formatWeightDisplay, calcPlates, TECHNIQUE, EXERCISE_DB,
+  DAY_TEMPLATES, DUMBBELL_EX, loadTypeOf, fitToInventory, preFatigue,
 };
 `;
 
@@ -283,6 +284,77 @@ const badCues = modeExercises.filter(n => {
   return !t || CUE_FIELDS.some(f => typeof t[f] !== "string" || !t[f].trim());
 });
 eq("each has setup/movement/feel/mistake", badCues, []);
+
+// ── Test 16: Full Body A/B/C — base lifts first ──────────────────────────────
+console.log("\n📋 TEST 16: Full Body A/B/C Put Base Lifts First");
+// Accessories: single-joint, rear-delt band work, core. Nothing loaded and
+// multi-joint may follow one of these.
+const ACCESSORY = new Set(["Face Pull","Band Pull-Apart","EZ Bar Curl","Dumbbell Curl","EZ Bar Reverse Curl",
+  "Dumbbell Fly","EZ Bar Skull Crusher","Tricep Overhead Ext","Calf Raise",
+  "Dead Bug","Plank","Ab Wheel Rollout","Bicycle Crunch","Thoracic Extension"]);
+for (const day of ["Full Body A","Full Body B","Full Body C"]) {
+  const names = T.getExercisesForDay(day, DATA.equipment, "hypertrophy", {}, "Intermediate", "weights").map(e => e.name);
+  const firstAcc = names.findIndex(n => ACCESSORY.has(n));
+  const lateBase = names.slice(firstAcc).filter(n => !ACCESSORY.has(n));
+  ok(`${day}: no base lift after an accessory`, firstAcc > 0 && !lateBase.length, names.join(" → "));
+}
+
+// ── Test 17: dumbbell targets stay on the rack ────────────────────────────────
+console.log("\n📋 TEST 17: Suggestions Only Use Weights That Exist");
+const RACK = DATA.dumbbellWeights.split(",").map(Number);
+const heavy = (ex, w, r) => [{ date:"2026-09-01", day:"Full Body B", mode:"weights",
+  log:{ [ex]:[{ weight:String(w), reps:String(r), rpe:"2" }] } }];
+const offRack = T.DUMBBELL_EX.map(ex => [ex, T.getSmartSuggestion(ex,"hypertrophy",heavy(ex,24,15),null,DATA)?.weight])
+  .filter(([, w]) => !RACK.includes(parseFloat(w)));
+eq("24kg x 15 never suggests a dumbbell that is not on the rack", offRack, []);
+eq("Bulgarian Split Squat is a dumbbell lift everywhere", T.loadTypeOf("Bulgarian Split Squat"), "dumbbell");
+const aiHeavy = T.getSmartSuggestion("Dumbbell Row","hypertrophy",[],null,
+  { ...DATA, activeMode:"weights", nextSession:{ fullbody:{ "Dumbbell Row":{ type:"weight", targetWeight:27, source:"ai_proposal" } } } });
+eq("an AI proposal above the rack is capped", aiHeavy.weight, "24.0");
+eq("...and flags reps as the way forward", aiHeavy.cappedFrom, "27.0");
+eq("an off-rack dumbbell snaps to the nearest real one", T.fitToInventory("Dumbbell Curl", 12.4, DATA), 11.5);
+eq("a dumbbell list longer than dumbbellMax is still capped",
+   T.fitToInventory("Dumbbell Curl", 30, { ...DATA, dumbbellWeights: DATA.dumbbellWeights + ",26,28" }), 24);
+eq("dip belt respects its max", T.fitToInventory("Weighted Dip", 31, DATA), 20);
+
+// ── Test 18: pre-fatigue correction ───────────────────────────────────────────
+console.log("\n📋 TEST 18: Same Muscle Already Worked → Lighter Target");
+eq("DB press after bench: prime mover shared → 10%", T.preFatigue("Dumbbell Shoulder Press",["Barbell Squat","Barbell Bench Press","Single-Arm Dumbbell Row"]).pct, 0.10);
+eq("DB press after dips: delts only a synergist → 5%", T.preFatigue("Dumbbell Shoulder Press",["Bulgarian Split Squat","Weighted Dip","Inverted Row"]).pct, 0.05);
+eq("row after pull-up: lats → 10%", T.preFatigue("Dumbbell Row",["Romanian Deadlift","Assisted Pull-Up","Dumbbell Bench Press"]).pct, 0.10);
+eq("curl after pull-up and row → 10%", T.preFatigue("EZ Bar Curl",["Romanian Deadlift","Assisted Pull-Up","Dumbbell Bench Press","Dumbbell Row","Face Pull"]).pct, 0.10);
+eq("bench after a squat is fresh", T.preFatigue("Barbell Bench Press",["Barbell Squat"]).pct, 0);
+eq("the discount is capped", T.preFatigue("EZ Bar Skull Crusher",["Close-Grip Bench Press","Weighted Dip","Tricep Dips"]).pct, 0.20);
+
+const A_BEFORE_PRESS = ["Barbell Squat","Barbell Bench Press","Single-Arm Dumbbell Row"];
+const fresh = [{ date:"2026-09-01", day:"Upper", mode:"weights",
+  log:{ "Dumbbell Shoulder Press":[{ weight:"20.5", reps:"10", rpe:"2" }] } }];
+const freshSug  = T.getSmartSuggestion("Dumbbell Shoulder Press","hypertrophy",fresh,null,DATA);
+const placedSug = T.getSmartSuggestion("Dumbbell Shoulder Press","hypertrophy",fresh,null,DATA,A_BEFORE_PRESS);
+ok("press logged fresh, now after the bench → lighter", parseFloat(placedSug.weight) < parseFloat(freshSug.weight),
+   `${placedSug.weight} vs ${freshSug.weight}`);
+ok("...still a dumbbell on the rack", RACK.includes(parseFloat(placedSug.weight)));
+eq("...and the card can say why", placedSug.fatigue?.by, ["Barbell Bench Press"]);
+
+const sameSlot = [{ date:"2026-09-01", day:"Full Body A", mode:"weights",
+  log:{ "Barbell Squat":[{ weight:"80", reps:"8", rpe:"2" }], "Barbell Bench Press":[{ weight:"60", reps:"8", rpe:"2" }],
+        "Single-Arm Dumbbell Row":[{ weight:"24", reps:"10", rpe:"2" }],
+        "Dumbbell Shoulder Press":[{ weight:"16", reps:"10", rpe:"2" }] } }];
+eq("press logged after the bench, placed after the bench → no double discount",
+   T.getSmartSuggestion("Dumbbell Shoulder Press","hypertrophy",sameSlot,null,DATA,A_BEFORE_PRESS).weight,
+   T.getSmartSuggestion("Dumbbell Shoulder Press","hypertrophy",sameSlot,null,DATA).weight);
+
+const planned = (fatigue) => ({ ...DATA, activeMode:"weights", nextSession:{ fullbody:{
+  "Dumbbell Shoulder Press":{ type:"weight", targetWeight:18, targetReps:9, lastRIR:2, targetRIR:2, source:"rir", ...(fatigue !== undefined ? { fatigue } : {}) } } } });
+eq("RIR plan earned in the same slot is honoured as-is",
+   T.getSmartSuggestion("Dumbbell Shoulder Press","hypertrophy",[],null,planned(0.10),A_BEFORE_PRESS).weight, "18.0");
+eq("legacy plan with no fatigue context is left alone",
+   T.getSmartSuggestion("Dumbbell Shoulder Press","hypertrophy",[],null,planned(undefined),A_BEFORE_PRESS).weight, "18.0");
+eq("plan earned fresh, now after the bench → next dumbbell down",
+   T.getSmartSuggestion("Dumbbell Shoulder Press","hypertrophy",[],null,planned(0),A_BEFORE_PRESS).weight, "16.0");
+const planOut = T.calcNextSessionPlan("Full Body A", sameSlot[0].log, "hypertrophy", DATA).plan;
+eq("new plans record the fatigue they were earned under", planOut["Dumbbell Shoulder Press"].fatigue, 0.10);
+eq("Full Body C shares the full-body plan bucket", T.getDayType("Full Body C"), "fullbody");
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log("\n" + "═".repeat(60));
