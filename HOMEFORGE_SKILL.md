@@ -316,13 +316,65 @@ and the baseline agree — the check itself is wrong).
 - **AI model**: `api/claude.js` uses `claude-haiku-4-5-20251001`. The analysis is
   now reasoning-heavy (ranking competing constraints); Sonnet would do it better
   at higher cost.
+- **`getBestRecord` mixes sets**: it takes the heaviest weight and the most reps
+  independently, so 89kg×8 plus an old 69kg×12 reads as 89kg×12 and the
+  log-based estimate overshoots (EZ Bar Curl suggested 28kg after 23kg×8–12).
+  Loaded-spine lifts are capped at the last weight lifted; everything else still
+  overshoots when no RIR plan exists. Fix: best set by estimated 1RM.
+- **Implement ceilings**: 5 lifts sit at the top of the rack — BSS, DB Bench,
+  DB Row, SA Row at 24kg dumbbells, Weighted Dip at the 20kg belt max. They need
+  a progression by tempo, pauses or harder variations, not load.
+- **Face Pull band tension is not logged** — 12 reps at RIR 2–3 in all 11
+  sessions of the 30-day review, so progression is invisible.
+- **Intensification for non-spine lifts** is sized at the 6-rep max for 6–8
+  reps, i.e. at failure — out of line with `TARGET_RIR = 2`.
 - Overload display in ExerciseCard: within-cycle + cycle-to-cycle (designed, not built)
 - Mesocycle data synced to Sheets (currently only sessions + config)
 - PWA manifest for better phone install experience
 
 ---
 
+## Reading the training log
+The live log is in Google Sheets, read through the Apps Script (read-only):
+
+```
+GET <Google Sheets URL above>?data={"action":"get_sessions"}   (URL-encode the JSON)
+→ { ok, sessions:[{ date, day, mode, volume, rating, notes, log:{ exercise:[{weight,reps,rpe}] }, … }] }
+```
+- `rpe` holds **RIR**, not RPE. Blank `weight` = bodyweight or band.
+- Dates come back in two forms: ISO `2026-09-12` and `"Sat Sep 12"` with no
+  year — parse the latter with the current year in **local** time
+  (`toISOString` shifts it a day in CEST).
+- Rows are duplicated (append, not upsert): dedup on `date|day|mode`.
+- Exercise order in `log` is the order a set was first entered for each
+  exercise — normally the card order, so not proof of the order performed.
+
+### Monthly review checklist
+Run against the last 30 days; the Oct 2026 review used exactly this list.
+1. Sessions/week vs planned, sessions cut short, rotation days skipped
+2. Days between loaded-spine sessions (target ≥ 3), and which hand-off is tight
+3. RIR of every squat/deadlift/RDL set (target: none below 3) and which set # dips
+4. Horizontal pull:push sets (≥ 1:1), vertical pull:push
+5. Front vs side vs rear delt and lower-trap sets/week
+6. Muscle groups below MEV (`MRV_TARGETS`)
+7. Lifts stalled ≥ 3 sessions, and whether they sit at an implement ceiling
+8. Avg RIR by position in the session (late slots drifting to RIR ≤ 1)
+
+## Browser verification
+If the Chrome extension or Playwright MCP is unavailable, use headless
+Playwright from the scratchpad with the already-downloaded browser:
+- `npm i playwright` in a scratch dir, then
+  `chromium.launch({ executablePath: "%LOCALAPPDATA%/ms-playwright/chromium-1243/chrome-win64/chrome.exe" })`
+  (the npm package expects a newer build that is not downloaded)
+- `npx vite --port 5179` in the background
+- Seed real history: copy a JSON file into the project root, `fetch()` it from
+  the page, write it into `localStorage.homeforge_data`, reload.
+  **Delete the seed file afterwards.**
+- 390×844 viewport matches the phone.
+
+---
+
 ## How to start a new chat
-This is a git repo — point Claude Code at it and it will read this file.
+This is a git repo — `CLAUDE.md` is loaded automatically and points here.
 
 First message: describe what you want to build or fix. Discuss before coding.
