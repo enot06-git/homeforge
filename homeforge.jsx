@@ -144,14 +144,33 @@ const REP_RANGES = {
 // wear rather than extra growth, and it preceded both training layoffs.
 const TARGET_RIR = 2;
 
-// The rep window for one exercise: its own repOverride if it has one, otherwise
-// the goal's range. Returned as numbers so the progression gate can compare.
+// Lifts that put load through the lumbar spine. The athlete asked for these to
+// stay well clear of failure: as a set nears failure the trunk brace goes before
+// the legs do, and that is when the disc takes the load. In the Sep-Oct 2026 log
+// both RIR-1 sets on these lifts were the 4th set; every 3rd set stayed at RIR 2+.
+//   - RIR 3, not 2, is the prescription
+//   - at most 3 working sets
+//   - 6-10 reps, so a set never runs long enough for the brace to fade
+//   - progression reads the HARDEST set, not the average (3,2,2,1 averages 2
+//     and used to earn "add a rep")
+const LOADED_SPINE = ["Barbell Squat","Barbell Deadlift","Romanian Deadlift","Barbell Good Morning",
+  "Barbell Row","Barbell Bent-Over Row"];
+const SPINE_TARGET_RIR = 3;
+const SPINE_MAX_SETS   = 3;
+const SPINE_REPS       = "6-10";
+const isLoadedSpine = (exName) => LOADED_SPINE.includes(exName);
+const targetRIRFor  = (exName) => isLoadedSpine(exName) ? SPINE_TARGET_RIR : TARGET_RIR;
+
+// The rep window for one exercise: its own repOverride (reps-only) or repRange
+// (loaded, but outside the goal's range — e.g. lateral raises) if it has one,
+// then the loaded-spine window, otherwise the goal's range. Returned as numbers
+// so the progression gate can compare.
 function repWindow(exName, goal) {
-  let range = (REP_RANGES[goal] || REP_RANGES.hypertrophy).reps;
+  let range = isLoadedSpine(exName) ? SPINE_REPS : (REP_RANGES[goal] || REP_RANGES.hypertrophy).reps;
   for (const list of Object.values(EXERCISE_DB)) {
     if (!Array.isArray(list)) continue;
     const hit = list.find(e => e.name === exName);
-    if (hit && hit.repOverride) { range = hit.repOverride; break; }
+    if (hit && (hit.repOverride || hit.repRange)) { range = hit.repOverride || hit.repRange; break; }
   }
   const [lo, hi] = String(range).split("-").map(n => parseInt(n));
   return { lo: lo || 8, hi: hi || lo || 12 };
@@ -189,8 +208,8 @@ const MUSCLE_MAP = {
   "Push":["chest","shoulders","triceps"],"Pull":["back","biceps","hamstrings","glutes"],
   "Legs":["quads","hamstrings","glutes","calves"],
   "Full Body":["chest","back","quads","hamstrings"],
-  "Full Body A":["chest","back","shoulders","quads","glutes"],
-  "Full Body B":["chest","back","shoulders","triceps","quads"],
+  "Full Body A":["chest","back","quads","glutes","hamstrings"],
+  "Full Body B":["chest","back","triceps","quads","calves"],
   "Full Body C":["chest","back","biceps","hamstrings","glutes"],
   "Upper A":["chest","back","shoulders","triceps","biceps"],
   "Upper B":["chest","back","shoulders"],"Lower A":["quads","hamstrings","glutes"],
@@ -216,6 +235,10 @@ const EXERCISE_DB = {
     { name:"Overhead Press",        eq:["barbell","squatstands"],       muscle:"Shoulders",       unilateral:false },
     { name:"EZ Bar Skull Crusher",  eq:["ezbar","bench"],               muscle:"Triceps",         unilateral:false },
     { name:"Close-Grip Bench Press",eq:["ezbar","bench"],               muscle:"Chest/Triceps",  unilateral:false },
+    // Side delts had no direct exercise at all: 2.6 sets/wk, all of it spill-over
+    // from overhead pressing, against ~10 for the front delts.
+    { name:"Lateral Raise",         eq:["dumbbells"],                   muscle:"Side Delt",       unilateral:false, repRange:"12-20" },
+    { name:"Band Lateral Raise",    eq:["bands"],                       muscle:"Side Delt",       unilateral:false, repOverride:"15-25" },
   ],
   Pull:[
     { name:"Assisted Pull-Up",       eq:["pullupbar","bands"],           muscle:"Back/Biceps",     unilateral:false },
@@ -234,6 +257,9 @@ const EXERCISE_DB = {
     { name:"EZ Bar Curl",           eq:["ezbar"],                       muscle:"Biceps",          unilateral:false },
     { name:"EZ Bar Reverse Curl",   eq:["ezbar"],                       muscle:"Biceps/Forearms", unilateral:false },
     { name:"EZ Bar Upright Row",    eq:["ezbar"],                       muscle:"Shoulders/Traps", unilateral:false },
+    // Lower traps pull the shoulder blades down and back — the muscle that
+    // actually opposes a kyphotic upper back. Nothing in the log trained it.
+    { name:"Prone Y-Raise",         eq:["dumbbells","bench"],           muscle:"Lower Traps/Rear Delt", unilateral:false, repRange:"10-15" },
   ],
   Legs:[
     { name:"Squat",                 eq:["bodyweight"],                  muscle:"Quads/Glutes",    unilateral:false },
@@ -249,6 +275,10 @@ const EXERCISE_DB = {
     { name:"Lunge",                 eq:["bodyweight"],                  muscle:"Quads/Glutes",    unilateral:true  },
     { name:"Balance Disc Squat",    eq:["balancedisc"],                 muscle:"Quads/Stability", unilateral:false },
     { name:"Single-Leg Balance Disc",eq:["balancedisc"],                muscle:"Glutes/Stability",unilateral:true  },
+    // Knee flexion with no spinal load: the only hamstring work had been the RDL
+    // (2.3 sets/wk), and adding more hinging is what the disc does not want.
+    { name:"Sliding Leg Curl",      eq:["bodyweight","mat"],            muscle:"Hamstrings",      unilateral:false, repOverride:"8-15" },
+    { name:"Single-Leg Calf Raise", eq:["dumbbells"],                   muscle:"Calves",          unilateral:true,  repRange:"10-20" },
   ],
   "Full Body":[
     { name:"Burpee",                eq:["bodyweight"],                  muscle:"Full Body",        unilateral:false },
@@ -273,6 +303,10 @@ const EXERCISE_DB = {
     { name:"Balance Disc Plank", eq:["balancedisc"],       muscle:"Core/Stability",    unilateral:false, timed:true,  timedSec:45  },
     { name:"Mountain Climber",   eq:["bodyweight","mat"],  muscle:"Core/Cardio",       unilateral:false, timed:true,  timedSec:30  },
     { name:"Thoracic Extension", eq:["bench","bodyweight"],muscle:"Thoracic/Posture",  unilateral:false, repOverride:"10-12", repsOnly:true },
+    // Lateral trunk stability — obliques were at 0 sets. Both resist motion
+    // rather than produce it, which is what a lumbar disc tolerates best.
+    { name:"Side Plank",         eq:["bodyweight","mat"],  muscle:"Obliques/Core",     unilateral:true,  timed:true,  timedSec:30  },
+    { name:"Pallof Press",       eq:["bands"],             muscle:"Obliques/Core",     unilateral:true,  repOverride:"10-12" },
   ],
 };
 
@@ -406,10 +440,17 @@ const EXERCISE_TO_MUSCLE_GROUP = (() => {
   ];
   all.forEach(ex => {
     const m = ex.muscle.toLowerCase();
+    // Shoulders are split into the three heads: lumped together, ~10 front-delt
+    // sets and ~3 side-delt sets read as a healthy "shoulders 13" and the
+    // imbalance never showed up anywhere.
     let g = "core";
     if (m.includes("chest"))                        g = "chest";
+    else if (m.includes("lower trap"))              g = "lowerTraps";
+    else if (m.includes("rear delt"))               g = "rearDelt";
     else if (m.includes("back") || m.includes("posterior") || m.includes("lat")) g = "back";
-    else if (m.includes("shoulder") || m.includes("delt") || m.includes("trap")) g = "shoulders";
+    else if (m.includes("side delt") || m.includes("trap")) g = "sideDelt";
+    else if (m.includes("shoulder") || m.includes("delt")) g = "frontDelt";
+    else if (m.includes("oblique"))                 g = "obliques";
     else if (m.includes("bicep"))                   g = "biceps";
     else if (m.includes("tricep"))                  g = "triceps";
     else if (m.includes("quad"))                    g = "quads";
@@ -421,11 +462,17 @@ const EXERCISE_TO_MUSCLE_GROUP = (() => {
   return map;
 })();
 
-// RP-derived MEV (min effective volume) and MRV (max recoverable volume) per week in sets
+// RP-derived MEV (min effective volume) and MRV (max recoverable volume) per week in sets.
+// Front delts have MEV 0: pressing for chest already covers them, and with
+// kyphosis the risk is too much front-delt work, not too little. Lower traps and
+// obliques have no RP figure; theirs are set for posture and trunk stability.
 const MRV_TARGETS = {
   chest:      { mev: 8,  mrv: 22 },
   back:       { mev: 10, mrv: 25 },
-  shoulders:  { mev: 8,  mrv: 22 },
+  frontDelt:  { mev: 0,  mrv: 12, label: "front delts" },
+  sideDelt:   { mev: 8,  mrv: 26, label: "side delts" },
+  rearDelt:   { mev: 6,  mrv: 22, label: "rear delts" },
+  lowerTraps: { mev: 3,  mrv: 12, label: "lower traps" },
   biceps:     { mev: 6,  mrv: 20 },
   triceps:    { mev: 6,  mrv: 18 },
   quads:      { mev: 8,  mrv: 20 },
@@ -433,7 +480,9 @@ const MRV_TARGETS = {
   glutes:     { mev: 4,  mrv: 16 },
   calves:     { mev: 6,  mrv: 16 },
   core:       { mev: 6,  mrv: 16 },
+  obliques:   { mev: 3,  mrv: 12 },
 };
+const muscleLabel = (m) => MRV_TARGETS[m]?.label || m;
 
 // ── Ordered Day Templates — correct exercise sequence per coaching principles ──
 // Each entry: exercise name + fallback alternatives if equipment missing
@@ -480,38 +529,60 @@ const DAY_TEMPLATES = {
   //   3. The loaded hinge appears in C only, and B (no axial load) sits between
   //      A's squat and it. Deadlift on Pull day and RDL on Legs day landed 2-3
   //      days apart nine times — the worst pattern in the log for a lumbar disc.
-  //      One hinge per rotation fixes the count; the A-B-C ORDER fixes the
-  //      spacing, which only matters once the athlete trains 3x/week.
+  //      One hinge per rotation fixes the count; pickNextDay() fixes the spacing
+  //      on irregular weeks, where the C -> A hand-off landed 1 and 2 days apart.
+  //
+  // Order inside each session (Sep-Oct 2026 log review):
+  //   - `primer`: low-effort trunk work FIRST, to brace before the loaded lift.
+  //     Done last, the ab wheel was taken to RIR 1 with reps falling 8 -> 6 —
+  //     the point where a fatigued rollout tips into lumbar extension.
+  //   - `pair`: press and pull alternate as a superset, PULL FIRST. Four of 11
+  //     sessions were cut short and the cut always took what came last — on
+  //     Sep 30 that left pull:push at 0. Alternating also saves ~8-10 minutes.
+  //   - No overhead press. Front delts ran ~10 sets/wk against ~3 for side
+  //     delts; chest pressing covers the front delts, lateral raises the sides,
+  //     and B's second vertical slot went to a chin-up (vertical push:pull had
+  //     been 20:9 sets).
+  //   - Lower traps (Prone Y-Raise), knee-flexion hamstrings, obliques and
+  //     calves were all at or near 0 sets and now have a slot.
   "Full Body A": [
+    { name:"Dead Bug",               alts:["Plank"],                                    eq:["bodyweight","mat"], primer:true },
     { name:"Barbell Squat",          alts:["Goblet Squat","Squat"],                     eq:["barbell","squatstands"] },
-    { name:"Barbell Bench Press",    alts:["Dumbbell Bench Press","Push-Up"],           eq:["barbell","bench"] },
-    { name:"Single-Arm Dumbbell Row",alts:["Dumbbell Row","Inverted Row"],              eq:["dumbbells","bench"] },
-    { name:"Dumbbell Shoulder Press",alts:["Overhead Press","Pike Push-Up"],            eq:["dumbbells"] },
-    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"] },
-    { name:"Dead Bug",               alts:["Plank"],                                    eq:["bodyweight","mat"] },
+    { name:"Single-Arm Dumbbell Row",alts:["Dumbbell Row","Inverted Row"],              eq:["dumbbells","bench"], pair:1 },
+    { name:"Barbell Bench Press",    alts:["Dumbbell Bench Press","Push-Up"],           eq:["barbell","bench"],   pair:1 },
+    { name:"Lateral Raise",          alts:["Band Lateral Raise"],                       eq:["dumbbells"],         pair:2 },
+    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"],             pair:2 },
+    { name:"Sliding Leg Curl",       alts:["Single-Leg Glute Bridge"],                  eq:["bodyweight","mat"] },
   ],
   "Full Body B": [
     // Unilateral lower body, and deliberately the MIDDLE of the rotation: quad
     // work with no bar on the back, so it separates A's squat from C's hinge.
     // At 3 sessions/week, running the hinge here instead would put loaded-spine
     // work 2 days after the squat every week — the same collision that showed up
-    // 9 times in the log. A -> B -> C spaces them 4 and 3 days, which is the best
-    // achievable with two loaded-spine sessions in a three-session week.
+    // 9 times in the log.
+    { name:"Side Plank",             alts:["Pallof Press","Dead Bug"],                  eq:["bodyweight","mat"], primer:true },
     { name:"Bulgarian Split Squat",  alts:["Lunge","Goblet Squat"],                     eq:["bodyweight","bench"] },
-    { name:"Weighted Dip",           alts:["Close-Grip Bench Press","Tricep Dips"],     eq:["pullupbar","dipbelt"] },
-    { name:"Inverted Row",           alts:["Dumbbell Row","Barbell Row"],               eq:["pullupbar","bodyweight"] },
-    { name:"Dumbbell Shoulder Press",alts:["Pike Push-Up","Overhead Press"],            eq:["dumbbells"] },
-    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"] },
-    { name:"Ab Wheel Rollout",       alts:["Dead Bug","Plank"],                         eq:["abwheel"] },
+    // Barbell Row is not an alternative here: a bent-over barbell row loads the
+    // lumbar spine in flexion, and B exists to carry no axial load.
+    { name:"Inverted Row",           alts:["Dumbbell Row"],                             eq:["pullupbar","bodyweight"], pair:1 },
+    { name:"Weighted Dip",           alts:["Close-Grip Bench Press","Tricep Dips"],     eq:["pullupbar","dipbelt"],    pair:1 },
+    { name:"Chin-Up",                alts:["Assisted Pull-Up","Neutral Grip Pull-Up"],  eq:["pullupbar"],              pair:2 },
+    { name:"Lateral Raise",          alts:["Band Lateral Raise"],                       eq:["dumbbells"],              pair:2 },
+    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"],                  pair:3 },
+    { name:"Prone Y-Raise",          alts:["Band Pull-Apart"],                          eq:["dumbbells","bench"],      pair:3 },
+    { name:"Single-Leg Calf Raise",  alts:["Calf Raise"],                               eq:["dumbbells"] },
   ],
   "Full Body C": [
     // The only loaded hinge in the rotation. RDL rather than conventional
     // deadlift by default — same posterior chain, less spinal compression.
-    { name:"Romanian Deadlift",      alts:["Barbell Deadlift","Single-Leg RDL"],        eq:["dumbbells","barbell"] },
-    { name:"Assisted Pull-Up",       alts:["Pull-Up","Inverted Row"],                   eq:["pullupbar"] },
-    { name:"Dumbbell Bench Press",   alts:["Barbell Bench Press","Push-Up"],            eq:["dumbbells","bench"] },
-    { name:"Dumbbell Row",           alts:["Single-Arm Dumbbell Row","Inverted Row"],   eq:["dumbbells"] },
-    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"] },
+    // Straps: the pull-up follows, and grip spent on the RDL put it at RIR 1.
+    { name:"Romanian Deadlift",      alts:["Single-Leg RDL","Barbell Deadlift"],        eq:["dumbbells","barbell"] },
+    { name:"Assisted Pull-Up",       alts:["Pull-Up","Inverted Row"],                   eq:["pullupbar"],         pair:1 },
+    { name:"Dumbbell Bench Press",   alts:["Barbell Bench Press","Push-Up"],            eq:["dumbbells","bench"], pair:1 },
+    { name:"Dumbbell Row",           alts:["Single-Arm Dumbbell Row","Inverted Row"],   eq:["dumbbells"],         pair:2 },
+    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"],             pair:2 },
+    { name:"Lateral Raise",          alts:["Band Lateral Raise"],                       eq:["dumbbells"],         pair:3 },
+    { name:"Prone Y-Raise",          alts:["Band Pull-Apart"],                          eq:["dumbbells","bench"], pair:3 },
     { name:"EZ Bar Curl",            alts:["Dumbbell Curl","Chin-Up"],                  eq:["ezbar"] },
   ],
   "Upper A": [
@@ -991,6 +1062,7 @@ const BW_LOAD_FRACTION = {
   // Isometric / low-load core and postural work still moves the torso.
   "Plank": 0.5, "Dead Bug": 0.2, "Bicycle Crunch": 0.2, "Ab Wheel Rollout": 0.5,
   "Balance Disc Plank": 0.5, "Thoracic Extension": 0.2, "Mountain Climber": 0.5,
+  "Side Plank": 0.5, "Sliding Leg Curl": 0.3, "Single-Leg Calf Raise": 0.9,
 };
 // Exercises where the logged number is assistance (band/machine), not added load.
 const ASSISTED_EX = ["Assisted Pull-Up"];
@@ -1055,6 +1127,57 @@ const HORIZ_PULL = ["Dumbbell Row","Single-Arm Dumbbell Row","Barbell Row","Inve
   "Face Pull","Band Pull-Apart","TRX Low Row","TRX High Row","TRX Y-Fly","Resistance Band Row","Kettlebell Row"];
 const LOADED_HINGE = ["Barbell Deadlift","Romanian Deadlift","Barbell Good Morning","Single-Leg RDL"];
 
+// ── Which session is next ────────────────────────────────────────────────────
+// Was "the day after the last one in the split". Two things broke that in the
+// Sep-Oct 2026 log:
+//   - A was cut short on Sep 30 and repeated on Oct 5, so C (the only hinge,
+//     vertical pull and curl) went 10+ days undone. Now: the day done LONGEST
+//     ago goes next, so a repeated or cut session cannot push another out.
+//   - C -> A landed 1 and 2 days apart (RDL then squat) because real weeks are
+//     not Mon/Wed/Fri. Now: if the last loaded-spine session was under
+//     SPINE_MIN_GAP days ago, a day with no axial load is preferred.
+const SPINE_MIN_GAP = 3;
+// Heavy barbell axial load only. A dumbbell Single-Leg RDL is a hinge but a
+// light one, which is why it is the no-axial-load swap for the RDL.
+const loadsSpine = isLoadedSpine;
+const dayLoadsSpine = (day) => (DAY_TEMPLATES[day] || []).some(e => loadsSpine(e.name));
+const sessionLoadedSpine = (h) => Object.entries(h.log || {})
+  .some(([ex, sets]) => loadsSpine(ex) && (sets || []).some(x => x.reps && parseInt(x.reps) > 0));
+
+function daysSinceSpine(history, today = new Date().toISOString().slice(0, 10)) {
+  const last = (history || []).find(h => h.day !== "Stretch" && sessionLoadedSpine(h));
+  return last ? daysBetween(today, last.date) : null;
+}
+
+function pickNextDay(split, history, today = new Date().toISOString().slice(0, 10)) {
+  const days = (split || []).filter(d => d && d !== "REST");
+  if (!days.length) return { day: null, reason: null };
+  const training = (history || []).filter(h => h.day !== "Stretch");
+  // Never-done days first (in split order), then oldest first; ties keep split order.
+  const lastDone = (d) => { const h = training.find(x => x.day === d); return h ? h.date : ""; };
+  const byStaleness = days.map((d, i) => ({ d, i, last: lastDone(d) }))
+    .sort((a, b) => (a.last === b.last ? a.i - b.i : a.last < b.last ? -1 : 1))
+    .map(x => x.d);
+  const gap = daysSinceSpine(training, today);
+  if (gap != null && gap < SPINE_MIN_GAP && dayLoadsSpine(byStaleness[0])) {
+    const safe = byStaleness.find(d => !dayLoadsSpine(d));
+    if (safe) return { day: safe, reason: `${byStaleness[0]} moved back — loaded spine ${gap} day${gap === 1 ? "" : "s"} ago` };
+  }
+  return { day: byStaleness[0], reason: null };
+}
+
+// The no-axial-load swap for each loaded-spine lift in a day: its first
+// template alternative that does not load the spine.
+function spineSwapsFor(day) {
+  const out = {};
+  (DAY_TEMPLATES[day] || []).forEach(e => {
+    if (!loadsSpine(e.name)) return;
+    const alt = (e.alts || []).find(a => !loadsSpine(a));
+    if (alt) out[e.name] = alt;
+  });
+  return out;
+}
+
 function countSetsIn(sessions, names) {
   let n = 0;
   (sessions || []).forEach(h => Object.entries(h.log || {}).forEach(([ex, sets]) => {
@@ -1106,7 +1229,7 @@ function buildTrainingContext(history, data) {
   const hingePairs = [];
   const spineGaps = [];
   const hingeOrAxial = lifting.filter(h => Object.keys(h.log || {})
-    .some(ex => LOADED_HINGE.includes(ex) || ex === "Barbell Squat" || ex === "Barbell Row"));
+    .some(ex => LOADED_HINGE.includes(ex) || isLoadedSpine(ex)));
   for (let i = 1; i < hingeOrAxial.length && i < 8; i++) {
     const g = daysBetween(hingeOrAxial[i - 1].date, hingeOrAxial[i].date);
     if (g > 0) spineGaps.push(g);
@@ -1136,6 +1259,15 @@ function buildTrainingContext(history, data) {
     daysSinceStretch: lastStretch ? daysBetween(today, lastStretch.date) : null,
     stretchEver: !!lastStretch,
     belowMEV,
+    delts: { front: (sets28.frontDelt || 0) / 4, side: (sets28.sideDelt || 0) / 4,
+             rear: (sets28.rearDelt || 0) / 4, lowerTraps: (sets28.lowerTraps || 0) / 4 },
+    spineHard: (() => {
+      // Sets on loaded-spine lifts that came in under the RIR-3 prescription.
+      const r = last28.flatMap(h => Object.entries(h.log || {}).filter(([ex]) => isLoadedSpine(ex))
+        .flatMap(([, sets]) => (sets || []).filter(x => x.reps && x.rpe !== "" && x.rpe != null).map(x => parseFloat(x.rpe))))
+        .filter(v => !isNaN(v));
+      return { total: r.length, under: r.filter(v => v < SPINE_TARGET_RIR).length, atOne: r.filter(v => v <= 1).length };
+    })(),
   };
 }
 
@@ -1147,7 +1279,7 @@ function formatTrainingContext(ctx) {
     L.push(`Gap before this session: ${ctx.gapBefore} days${ctx.gapBefore >= 10 ? " — this session follows a layoff" : ""}.`);
   if (ctx.maxGap != null) L.push(`Longest gap in the last 12 sessions: ${ctx.maxGap} days.`);
   if (ctx.rirSeries.length)
-    L.push(`Avg RIR, last ${ctx.rirSeries.length} sessions (newest first): ${ctx.rirSeries.map(v => v.toFixed(1)).join(", ")}. Prescription is RIR ${TARGET_RIR}.`);
+    L.push(`Avg RIR, last ${ctx.rirSeries.length} sessions (newest first): ${ctx.rirSeries.map(v => v.toFixed(1)).join(", ")}. Prescription is RIR ${TARGET_RIR} (RIR ${SPINE_TARGET_RIR} on loaded-spine lifts).`);
   if (ctx.hardRecent.length)
     L.push(`Share of sets taken to RIR<=1: ${ctx.hardRecent.map(v => Math.round(v * 100) + "%").join(", ")}.`);
   L.push(`Mesocycle: ${ctx.meso.phase} ${ctx.meso.sessionCount}/${PHASE_LENGTHS[ctx.meso.phase] || 5}. Deload is scheduled every 6th session.` +
@@ -1156,12 +1288,14 @@ function formatTrainingContext(ctx) {
     L.push(`MANAGED — upper-back kyphosis. Last 28 days: ${ctx.pullSets} horizontal pull sets vs ${ctx.pushSets} horizontal push (${ctx.ratio.toFixed(2)}:1). Target is at least 1:1.`);
   L.push(`MANAGED — lumbar disc. ${ctx.daysSinceHinge != null ? `Last loaded hinge ${ctx.daysSinceHinge} days ago.` : "No recent loaded hinge."}` +
     ` Loaded-spine sessions landing within 2 days of each other, recently: ${ctx.closeSpineSessions} (target 0).` +
-    (ctx.minSpineGap != null ? ` Closest spacing recently: ${ctx.minSpineGap} days — 3 or more is fine.` : ""));
+    (ctx.minSpineGap != null ? ` Closest spacing recently: ${ctx.minSpineGap} days — 3 or more is fine.` : "") +
+    (ctx.spineHard.total ? ` Loaded-spine sets in 28 days: ${ctx.spineHard.total}, of which ${ctx.spineHard.under} below RIR ${SPINE_TARGET_RIR} and ${ctx.spineHard.atOne} at RIR<=1 (target 0 — the athlete does not take these lifts near failure).` : ""));
+  L.push(`Shoulder balance (sets/week, 28 days): front delts ${ctx.delts.front.toFixed(1)}, side delts ${ctx.delts.side.toFixed(1)}, rear delts ${ctx.delts.rear.toFixed(1)}, lower traps ${ctx.delts.lowerTraps.toFixed(1)}. Front delts above side delts feeds the rounded-shoulder posture.`);
   L.push(ctx.stretchEver
     ? `Mobility routine last done ${ctx.daysSinceStretch} days ago.`
     : `Mobility routine has NEVER been logged, though it exists and is written for these two problems.`);
   if (ctx.belowMEV.length)
-    L.push(`Below minimum effective volume (sets/week vs MEV): ${ctx.belowMEV.map(x => `${x.m} ${x.wk.toFixed(1)}/${x.mev}`).join(", ")}.`);
+    L.push(`Below minimum effective volume (sets/week vs MEV): ${ctx.belowMEV.map(x => `${muscleLabel(x.m)} ${x.wk.toFixed(1)}/${x.mev}`).join(", ")}.`);
   return L.map(l => "- " + l).join(String.fromCharCode(10));
 }
 
@@ -1295,7 +1429,9 @@ function getExercisesForDay(day, equipment, goal, favourites, level, mode) {
         // Find this exercise in the DB
         const dbEx = Object.values(EXERCISE_DB).flat().find(e => e.name === name);
         if (dbEx && dbEx.eq.some(e => equipment.includes(e))) {
-          exercises.push({ ...dbEx, isFav: allFavs.includes(dbEx.name) });
+          exercises.push({ ...dbEx, isFav: allFavs.includes(dbEx.name),
+            ...(entry.pair   ? { pair: entry.pair } : {}),
+            ...(entry.primer ? { primer: true }     : {}) });
           break;
         }
       }
@@ -1386,14 +1522,32 @@ function shouldDeload(history, bodyWeight) {
 
 // ── RP-style muscle volume & fatigue helpers ──────────────────────────────────
 
+// Muscles credited by one set of an exercise: 1 for a prime mover, 0.5 for a
+// synergist (from MOVERS). Counting the primary only scored a bench set as 0
+// front-delt sets, which is exactly how the front:side delt imbalance hid.
+// Lower back is not a hypertrophy target here, so it earns no credit.
+const MOVER_GROUP = { chest:"chest", lats:"back", upperBack:"back", frontDelt:"frontDelt",
+  sideDelt:"sideDelt", rearDelt:"rearDelt", lowerTraps:"lowerTraps", biceps:"biceps",
+  triceps:"triceps", quads:"quads", glutes:"glutes", hamstrings:"hamstrings",
+  calves:"calves", core:"core", obliques:"obliques" };
+function muscleCredit(exName) {
+  const m = MOVERS[exName];
+  if (!m) return { [EXERCISE_TO_MUSCLE_GROUP[exName] || "core"]: 1 };
+  const out = {};
+  const add = (mover, c) => { const g = MOVER_GROUP[mover]; if (g) out[g] = Math.max(out[g] || 0, c); };
+  m.s.forEach(mv => add(mv, 0.5));
+  m.p.forEach(mv => add(mv, 1));
+  return out;
+}
+
 // Working sets per muscle group for a given list of sessions
 function getMuscleWeeklySets(sessions) {
   const counts = {};
   (sessions || []).forEach(h => {
     Object.entries(h.log || {}).forEach(([exName, sets]) => {
-      const muscle = EXERCISE_TO_MUSCLE_GROUP[exName] || "core";
-      const working = sets.filter(s => s.reps && parseInt(s.reps) > 0).length;
-      counts[muscle] = (counts[muscle] || 0) + working;
+      const working = sets.filter(s => (s.reps && parseInt(s.reps) > 0) || (s.seconds && parseInt(s.seconds) > 0)).length;
+      if (!working) return;
+      Object.entries(muscleCredit(exName)).forEach(([g, c]) => { counts[g] = (counts[g] || 0) + working * c; });
     });
   });
   return counts;
@@ -2038,8 +2192,10 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const _isIntense  = _meso.phase === "intensification";
   // Two-thirds of the working sets, not half: enough to hold the movement
   // pattern without adding fatigue.
+  const spine = isLoadedSpine(key);
+  const baseSets = spine ? Math.min(rr.sets, SPINE_MAX_SETS) : rr.sets;
   const numSets = (isTimed || repOverride) ? effectiveSets
-    : _isDeload ? Math.max(2, Math.round(rr.sets * 2 / 3)) : rr.sets;
+    : _isDeload ? Math.max(2, Math.round(baseSets * 2 / 3)) : baseSets;
   const suggestion = useMemo(
     () => getSmartSuggestion(key, goal, history, data.profileBaseline, data, priorNames),
     [key, goal, history, data.profileBaseline, data.nextSession, data.activeMode, data.barWeight, data.barbellPlates, data.ezbarWeight, data.ezbarPlates, data.dumbbellMax, data.dumbbellWeights, data.dipbeltMax, priorNames]
@@ -2048,7 +2204,8 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   // static rep range — that is how those modes actually progress.
   const isPlanned     = suggestion?.source === "planned" || suggestion?.source === "ai_planned";
   const plannedReps   = isPlanned && !suggestion?.weight ? suggestion.reps : null;
-  const effectiveReps = plannedReps || repOverride || rr.reps;
+  const loadedRange   = activeEx.repRange || (spine ? SPINE_REPS : null);
+  const effectiveReps = plannedReps || repOverride || loadedRange || rr.reps;
   // Bottom of the target range — what the set input hints at, so the box agrees
   // with TODAY'S TARGET rather than echoing last session's rep count.
   const repsHint      = String(effectiveReps).split("-")[0];
@@ -2215,8 +2372,19 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
               {activeEx.name}
               {swappedTo && <span style={S.tag("var(--blue)")}>swapped</span>}
               {activeEx.unilateral && <span style={S.tag("var(--purple)")}>unilateral</span>}
+              {spine && <span style={S.tag("var(--red)")}>lower back · RIR {SPINE_TARGET_RIR}</span>}
             </div>
             <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", marginTop:2 }}>{activeEx.muscle}</div>
+            {activeEx.primer && (
+              <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--blue)", marginTop:2 }}>
+                warm-up · brace before the main lift · stop at RIR 3+
+              </div>
+            )}
+            {activeEx.pairWith && (
+              <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--purple)", marginTop:2 }}>
+                ⇄ superset with {activeEx.pairWith} — alternate sets
+              </div>
+            )}
           </div>
         </div>
         <button style={S.btnSm} aria-label={expanded ? "Collapse exercise" : "Log sets"} onClick={() => setExpanded(e => !e)}>{expanded ? "▲" : "Log"}</button>
@@ -2428,7 +2596,9 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
           )}
 
           <div style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)", marginBottom:8, letterSpacing:1 }}>
-            {isTimed ? "LOG SETS — seconds held / RIR (0=max effort, 2-3=target)" : repsOnly ? "LOG SETS — reps only" : "LOG SETS — weight kg / reps / RIR (0=failure, 2-3=target)"}
+            {isTimed ? "LOG SETS — seconds held / RIR (0=max effort, 2-3=target)" : repsOnly ? "LOG SETS — reps only"
+              : spine ? `LOG SETS — weight kg / reps / RIR (${SPINE_TARGET_RIR}+ = target — end the set when the brace or bar speed goes)`
+              : "LOG SETS — weight kg / reps / RIR (0=failure, 2-3=target)"}
           </div>
 
           {sets.map((set,i) => {
@@ -2496,6 +2666,11 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
                 {setDisplay?.detail && set.weight && (
                   <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", marginTop:2, marginLeft:25 }}>
                     {setDisplay.detail}
+                  </div>
+                )}
+                {spine && set.rpe !== "" && set.rpe != null && parseInt(set.rpe) < SPINE_TARGET_RIR && (
+                  <div style={{ fontSize:10, color: parseInt(set.rpe) <= 1 ? "var(--red)" : "var(--amber)", fontFamily:"var(--font-m)", marginTop:2, marginLeft:25 }}>
+                    RIR {set.rpe} is too close for the lower back — {i < sets.length - 1 ? "take a rep off the next set, or end here. " : ""}Next session holds the weight.
                   </div>
                 )}
                 {set.rpe && parseInt(set.rpe) <= 1 && data.level === "Beginner" && (
@@ -3008,14 +3183,20 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
     const pool = isWeights
       ? Object.values(EXERCISE_DB).flat()
       : Object.values(MODE_EXERCISE_DB[mode] || {}).flat();
-    return raw
+    const list = raw
       .filter(ex => !ov.removed.includes(ex.name))
       .map(ex => {
         const rep = ov.replaced[ex.name];
         if (!rep) return ex;
         const dbEx = pool.find(e => e.name === rep);
-        return dbEx ? { ...dbEx, isFav: false } : ex;
+        // A swap keeps its slot's role: still paired, still a primer.
+        return dbEx ? { ...dbEx, isFav: false, pair: ex.pair, primer: ex.primer } : ex;
       });
+    // Name each superset partner. A pair with one half removed is a straight set.
+    return list.map(ex => {
+      const mate = ex.pair && list.find(o => o !== ex && o.pair === ex.pair);
+      return mate ? { ...ex, pairWith: mate.name } : ex;
+    });
   }, [day, mode, isWeights, data.equipment, data.goal, data.favourites, data.level, data.sessionOverride]);
 
   // What each card follows in today's order — drives the pre-fatigue correction.
@@ -3120,7 +3301,7 @@ Read the TRAINING CONTEXT block before you read today's numbers. It tells you wh
 Rank what you say by what actually limits progress, in this order:
 1. Adherence. If actual sessions/week is below planned, that is the binding constraint and nothing else you say matters as much. Say so plainly.
 2. Fatigue and recovery. Rising share of RIR<=1 sets, falling avg RIR across sessions, or a long run with no deload — at 49 this precedes layoffs rather than following them.
-3. The managed conditions. A horizontal pull:push ratio under 1:1 is feeding the kyphosis. Loaded-spine sessions landing within 3 days is the disc risk. Mobility work never being logged matters more than any weight on any bar.
+3. The managed conditions. A horizontal pull:push ratio under 1:1, or front-delt sets above side-delt sets, is feeding the kyphosis. Loaded-spine sessions landing within 3 days is the disc risk, and so is any loaded-spine set below RIR ${SPINE_TARGET_RIR}. Mobility work never being logged matters more than any weight on any bar.
 4. Volume below MEV for the goal.
 5. Only then, load progression on individual lifts.
 
@@ -3128,6 +3309,8 @@ Rules:
 - Never recommend a weight increase in the same breath as a fatigue or layoff warning. Pick one.
 - If this session follows a gap of 10+ days, treat it as a re-entry: hold or reduce load, and say when to resume adding.
 - Prescribe RIR ${TARGET_RIR}. If recent sets sat at RIR<=1, say to back off before adding anything.
+- Loaded-spine lifts (${LOADED_SPINE.join(", ")}) are the exception, by the athlete's own choice for the lumbar disc: RIR ${SPINE_TARGET_RIR}, at most ${SPINE_MAX_SETS} working sets, ${SPINE_REPS} reps. Never suggest taking them closer to failure, adding a set, or a heavier top set. Any set on them below RIR ${SPINE_TARGET_RIR} means hold the load next time.
+- Never suggest adding overhead pressing; side delts are trained with lateral raises.
 - Cite real numbers from the data given. Never invent a number you were not shown.
 
 Respond in EXACTLY this format with these three section markers on their own lines. Do not add any text before [SESSION] or after the last proposal.
@@ -3719,10 +3902,52 @@ const TECHNIQUE = {
     mistake:  "Rounding the back or yanking the bar up — push the floor away and keep the spine neutral.",
   },
   "Romanian Deadlift": {
-    setup:    "Slight, fixed knee bend, bar against the thighs, shoulders back.",
+    setup:    "Slight, fixed knee bend, bar against the thighs, shoulders back. Use straps — the pull-up that follows needs your grip.",
     movement: "Hinge at the hips, pushing them back and feeling the hamstrings stretch; stop before the back rounds.",
     feel:     "A deep stretch along the hamstrings and glutes.",
     mistake:  "Chasing depth until the back rounds — it's about the hip hinge, not how low the bar goes.",
+  },
+  "Lateral Raise": {
+    setup:    "Stand tall, light dumbbells at the sides, a slight bend in the elbows, shoulder blades set down.",
+    movement: "Raise the arms out to the sides to shoulder height, leading with the elbows, pause, then lower over 2-3 seconds.",
+    feel:     "The side of the shoulder burning — not the neck or the traps.",
+    mistake:  "Swinging or shrugging the weight up — go lighter; if the traps take over, the side delts are not working.",
+  },
+  "Band Lateral Raise": {
+    setup:    "Stand on the middle of a band, one handle in each hand, a slight bend in the elbows.",
+    movement: "Raise the arms out to the sides to shoulder height against the band, pause, and lower slowly.",
+    feel:     "The side delts, hardest at the top where the band is stretched.",
+    mistake:  "Shrugging toward the ears at the top — keep the shoulders down and stop at shoulder height.",
+  },
+  "Prone Y-Raise": {
+    setup:    "Lie face-down on a bench set to about 30°, very light dumbbells hanging, thumbs up.",
+    movement: "Pull the shoulder blades down and back, then raise the arms into a Y in line with the ears; pause, lower slowly.",
+    feel:     "Low between the shoulder blades — the lower traps — with the upper back extending.",
+    mistake:  "Shrugging or arching the lower back to get the weight up — 2-4kg is plenty; the shoulder blades must move down, not up.",
+  },
+  "Sliding Leg Curl": {
+    setup:    "Lie on your back, heels on a towel or sliders on a smooth floor, knees bent, arms on the floor.",
+    movement: "Lift the hips into a bridge, slide the heels out until the legs are nearly straight, then curl them back in — hips stay up.",
+    feel:     "The hamstrings working hard, with the glutes holding the bridge.",
+    mistake:  "Letting the hips sag or arching the lower back — if the hips drop, end the set; slide out slower before going further.",
+  },
+  "Single-Leg Calf Raise": {
+    setup:    "Ball of one foot on a step or plate, a dumbbell in the same-side hand, the other hand on a wall for balance.",
+    movement: "Lower the heel below the step for a full stretch, pause, then rise as high as possible onto the toes.",
+    feel:     "A strong stretch at the bottom and the calf cramping at the top.",
+    mistake:  "Bouncing through short reps — pause in the stretch and at the top; the range is the stimulus.",
+  },
+  "Side Plank": {
+    setup:    "On one side, elbow under the shoulder, feet stacked or staggered, body in one straight line.",
+    movement: "Lift the hips and hold the line from head to heels; breathe behind the brace. Switch sides.",
+    feel:     "The obliques and the side of the trunk holding you up — the spine stays still.",
+    mistake:  "Hips sagging or rolling forward — drop to the knees before the line breaks.",
+  },
+  "Pallof Press": {
+    setup:    "Band anchored at chest height to one side, hands at the sternum, feet shoulder-width, side-on to the anchor.",
+    movement: "Press the hands straight out, hold 2 seconds without letting the band turn you, bring them back. Switch sides.",
+    feel:     "The obliques and deep core resisting rotation while the spine stays still.",
+    mistake:  "Letting the torso twist toward the anchor — step closer for less tension until you can stay square.",
   },
   "Goblet Squat": {
     setup:    "Hold a dumbbell at the chest, elbows inside the knees, feet shoulder-width.",
@@ -4039,7 +4264,8 @@ const TECHNIQUE = {
 // heaviest dumbbell nor snapped to a real one (24kg x 12 came back as 28.3kg).
 const DUMBBELL_EX = ["Dumbbell Bench Press","Dumbbell Shoulder Press","Dumbbell Row","Dumbbell Curl",
   "Single-Arm Dumbbell Row","Dumbbell Fly","Goblet Squat","Single-Leg RDL","Tricep Overhead Ext",
-  "Clean & Press","Single-Arm DB Press","Bulgarian Split Squat","Lunge"];
+  "Clean & Press","Single-Arm DB Press","Bulgarian Split Squat","Lunge",
+  "Lateral Raise","Prone Y-Raise","Single-Leg Calf Raise"];
 const BARBELL_EX  = ["Barbell Bench Press","Barbell Squat","Barbell Deadlift","Barbell Row",
   "Overhead Press","Romanian Deadlift"];
 const EZ_EX       = ["EZ Bar Curl","EZ Bar Skull Crusher","EZ Bar Reverse Curl","EZ Bar Upright Row",
@@ -4094,8 +4320,10 @@ const MOVERS = {
   "Weighted Push-Up":        { p:["chest"],                     s:["frontDelt","triceps"] },
   "Weighted Dip":            { p:["chest","triceps"],           s:["frontDelt"] },
   "Tricep Dips":             { p:["triceps"],                   s:["chest","frontDelt"] },
-  "Overhead Press":          { p:["frontDelt"],                 s:["triceps"] },
-  "Dumbbell Shoulder Press": { p:["frontDelt"],                 s:["triceps"] },
+  "Overhead Press":          { p:["frontDelt"],                 s:["triceps","sideDelt"] },
+  "Dumbbell Shoulder Press": { p:["frontDelt"],                 s:["triceps","sideDelt"] },
+  "Lateral Raise":           { p:["sideDelt"],                  s:[] },
+  "Band Lateral Raise":      { p:["sideDelt"],                  s:[] },
   "Pike Push-Up":            { p:["frontDelt"],                 s:["triceps"] },
   "EZ Bar Skull Crusher":    { p:["triceps"],                   s:[] },
   "Tricep Overhead Ext":     { p:["triceps"],                   s:[] },
@@ -4111,6 +4339,7 @@ const MOVERS = {
   "Single-Arm Dumbbell Row": { p:["lats","upperBack"],          s:["biceps","rearDelt"] },
   "Barbell Row":             { p:["lats","upperBack"],          s:["biceps","rearDelt","lowerBack"] },
   "Face Pull":               { p:["rearDelt","upperBack"],      s:[] },
+  "Prone Y-Raise":           { p:["lowerTraps"],                s:["rearDelt","upperBack"] },
   "Band Pull-Apart":         { p:["rearDelt","upperBack"],      s:[] },
   "EZ Bar Curl":             { p:["biceps"],                    s:[] },
   "Dumbbell Curl":           { p:["biceps"],                    s:[] },
@@ -4123,6 +4352,15 @@ const MOVERS = {
   "Barbell Deadlift":        { p:["hamstrings","glutes","lowerBack"], s:["quads","upperBack"] },
   "Romanian Deadlift":       { p:["hamstrings","glutes"],       s:["lowerBack"] },
   "Single-Leg RDL":          { p:["hamstrings","glutes"],       s:[] },
+  "Sliding Leg Curl":        { p:["hamstrings"],                s:["glutes"] },
+  "Single-Leg Glute Bridge": { p:["glutes"],                    s:["hamstrings"] },
+  "Calf Raise":              { p:["calves"],                    s:[] },
+  "Single-Leg Calf Raise":   { p:["calves"],                    s:[] },
+  "Dead Bug":                { p:["core"],                      s:[] },
+  "Plank":                   { p:["core"],                      s:["obliques"] },
+  "Ab Wheel Rollout":        { p:["core"],                      s:["lats"] },
+  "Side Plank":              { p:["obliques"],                  s:["core"] },
+  "Pallof Press":            { p:["obliques"],                  s:["core"] },
 };
 // Load lost per earlier exercise that shares a prime mover with this one:
 // ~10% when it was a prime mover there too, ~5% when it was only a synergist.
@@ -4192,6 +4430,8 @@ const CROSS_RATIOS = {
   "EZ Bar Skull Crusher":     { from: "Barbell Bench Press", pct: 0.50 },
   "Dumbbell Fly":             { from: "Barbell Bench Press", pct: 0.20 }, // per hand — already set by baseline
   "Single-Arm DB Press":      { from: "Barbell Bench Press", pct: 0.30 }, // per hand
+  "Lateral Raise":            { from: "Dumbbell Shoulder Press", pct: 0.35 }, // per hand
+  "Prone Y-Raise":            { from: "Dumbbell Shoulder Press", pct: 0.15 }, // per hand, deliberately light
 };
 
 const USER_BASELINE = {
@@ -4271,6 +4511,11 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
     if (!rirValues.length) return;
 
     const avgRIR = rirValues.reduce((a, b) => a + b, 0) / rirValues.length;
+    // Loaded-spine lifts are judged by their hardest set: one RIR-1 set is the
+    // set that matters for the disc, and averaging it with three RIR-2/3 sets
+    // used to read as "on target, add a rep".
+    const spine  = isLoadedSpine(exName);
+    const minRIR = Math.min(...rirValues);
 
     if (repsOnlyMode || hasTimed || (!hasWeight && hasReps) || isBodyweightEx(exName)) {
       const lastReps = sets.filter(s => s.reps).map(s => parseInt(s.reps));
@@ -4309,6 +4554,12 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
       else if (avgRIR > 3) targetWeight = stepDB(currentWeight, 2);
       // else: avgRIR 2-3 but reps < 10 → keep same weight, let reps climb
       targetWeight = Math.min(targetWeight, dbMax);
+    } else if (spine && isBarbellEx(exName)) {
+      // RIR 3 on every set at the top of the range earns load; any set at 2
+      // holds everything; any set at 1 or below backs off. Never the big jump.
+      if (minRIR <= 1) targetWeight = Math.max(0, currentWeight - barbellSmallInc);
+      else if (minRIR >= SPINE_TARGET_RIR && repsReadyForIncrease) targetWeight = currentWeight + barbellSmallInc;
+      targetWeight = Math.min(targetWeight, barbellMax);
     } else if (isBarbellEx(exName)) {
       if (avgRIR <= 1) targetWeight = Math.max(0, currentWeight - barbellSmallInc);
       else if (avgRIR <= 3 && repsReadyForIncrease) targetWeight = currentWeight + barbellSmallInc;
@@ -4336,13 +4587,14 @@ function calcNextSessionPlan(day, sessionLog, goal, data) {
     if (targetWeight > currentWeight)      targetReps = repFloor;
     else if (targetWeight < currentWeight) targetReps = avgReps;
     else if (avgRIR <= 1)                  targetReps = avgReps;
+    else if (spine && minRIR < SPINE_TARGET_RIR) targetReps = Math.min(avgReps, repCeiling);
     else                                   targetReps = Math.min(avgReps + 1, repCeiling);
 
     plan[exName] = {
       targetWeight: parseFloat(targetWeight.toFixed(1)),
       targetReps,
-      targetRIR: TARGET_RIR,
-      lastRIR: parseFloat(avgRIR.toFixed(1)),
+      targetRIR: targetRIRFor(exName),
+      lastRIR: parseFloat((spine ? minRIR : avgRIR).toFixed(1)),
       source: "rir",
       type: "weight",
       // How pre-fatigued this lift was when the RIR above was earned, so a plan
@@ -4400,7 +4652,13 @@ function getSmartSuggestion(exName, goal, history, profileBaseline, data, priorN
 
 function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
   const rr = REP_RANGES[goal] || REP_RANGES.general;
-  const targetReps = parseInt(rr.reps.split("-")[0]);
+  // Load is sized for the bottom of this exercise's own window. A loaded-spine
+  // lift is sized for the reps it could do PLUS its reserve, so the estimate
+  // lands at RIR 3 rather than at failure.
+  const spine = isLoadedSpine(exName);
+  const ownReps = repWindow(exName, goal).lo;
+  const targetReps = ownReps + (spine ? SPINE_TARGET_RIR : 0);
+  const repsLabel = spine ? SPINE_REPS : (repWindow(exName, goal).lo + "-" + repWindow(exName, goal).hi);
   const dbMax = parseFloat(data?.dumbbellMax) || 24;
   const barbellMax = parseFloat(data?.barbellMax) || 119;
   const ezMax = parseFloat(data?.ezbarMax) || 113;
@@ -4447,11 +4705,13 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
         if (p.type === "weight" && p.targetWeight && isWeightsMode(activeMode))
           // Report where the target actually came from. planRIR is only set for
           // RIR-derived plans, so an AI-adjusted load never claims to be one.
-          return { weight: p.targetWeight.toFixed(1), reps: rr.reps,
+          return { weight: p.targetWeight.toFixed(1), reps: repsLabel,
             source: p.source === "ai_proposal" ? "ai_planned" : "planned",
             oneRM: calc1RM(p.targetWeight, p.targetReps),
             planRIR: p.source === "ai_proposal" ? undefined : (p.lastRIR ?? p.targetRIR),
-            planTargetRIR: p.source === "ai_proposal" ? undefined : (p.lastRIR != null ? p.targetRIR : undefined),
+            // Plans stored before the loaded-spine rule say RIR 2; never show less than the rule.
+            planTargetRIR: p.source === "ai_proposal" ? undefined
+              : (p.lastRIR != null ? Math.max(p.targetRIR ?? 0, targetRIRFor(exName)) : undefined),
             // Plans saved before pre-fatigue tracking carry no context: leave them unscaled.
             refFatigue: p.source === "ai_proposal" ? undefined : p.fatigue };
         if (p.type === "reps")
@@ -4463,7 +4723,7 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
 
   // Non-weights modes stop here: no loaded record, baseline, or cross-exercise
   // estimate applies. Progression for these comes purely from the rep plan above.
-  if (!isWeightsMode(activeMode)) return { weight: null, reps: rr.reps, source: "bw", oneRM: null };
+  if (!isWeightsMode(activeMode)) return { weight: null, reps: repsLabel, source: "bw", oneRM: null };
 
   // Intensification phase — formula-based weight calc
   if (data?.mesocycle?.phase === "intensification") {
@@ -4473,11 +4733,13 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
     );
     if (bestW > 0) {
       const oneRM  = calc1RM(bestW, bestR);
-      const rawSug = weightForReps(oneRM, 6);
+      // Loaded-spine lifts keep their reserve in the heavy block too: the load
+      // for 6 reps at RIR 3 is the 9-rep-max load.
+      const rawSug = weightForReps(oneRM, 6 + (spine ? SPINE_TARGET_RIR : 0));
       const finalW = fitToInventory(exName, rawSug, data);
       return {
         weight: finalW.toFixed(1), reps: "6-8", source: "intensification", oneRM,
-        intensificationNote: `from ${bestW}kg x ${bestR} (1RM ~${oneRM}kg)`,
+        intensificationNote: `from ${bestW}kg x ${bestR} (1RM ~${oneRM}kg)${spine ? ` · RIR ${SPINE_TARGET_RIR}` : ""}`,
         refFatigue: loggedFatigue(exName, bestW, history),
       };
     }
@@ -4490,9 +4752,18 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
     const suggested = weightForReps(oneRM, targetReps);
     const inc = goal === "strength" ? 2.5 : 1.25;
     const bump = best.reps >= targetReps ? inc : 0;
-    const raw = capWeight(suggested + bump);
+    let raw = capWeight(suggested + bump);
+    // getBestRecord pairs the heaviest weight with the most reps from ANY set,
+    // so 89kg x 8 plus an old 69kg x 12 reads as an 89kg x 12 best and the
+    // estimate overshoots. For loaded-spine lifts load only ever moves through
+    // the RIR plan: without one, never suggest more than was last lifted.
+    if (spine) {
+      const lastW = Math.max(0, ...((weightsHistory(history).find(h => h.log?.[exName])?.log[exName]) || [])
+        .map(s => parseFloat(s.weight) || 0));
+      if (lastW > 0) raw = Math.min(raw, lastW);
+    }
     const final = isDumbbell ? snapToDB(raw) : raw;
-    return { weight: final.toFixed(1), reps: rr.reps, source: "log", oneRM,
+    return { weight: final.toFixed(1), reps: repsLabel, source: "log", oneRM,
              refFatigue: loggedFatigue(exName, best.weight, history) };
   }
   // 2. Profile baseline
@@ -4501,7 +4772,7 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
     const oneRM = calc1RM(base.weight, base.reps);
     const suggested = capWeight(weightForReps(oneRM, targetReps));
     const final = isDumbbell ? snapToDB(suggested) : suggested;
-    return { weight: final.toFixed(1), reps: rr.reps, source: "baseline", oneRM, refFatigue: 0 };
+    return { weight: final.toFixed(1), reps: repsLabel, source: "baseline", oneRM, refFatigue: 0 };
   }
   // 3. Cross-exercise estimate
   const ratio = CROSS_RATIOS[exName];
@@ -4515,11 +4786,11 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
       const est1RM = Math.round(ref1RM * ratio.pct);
       const raw = capWeight(weightForReps(est1RM, targetReps));
       const final = isDumbbell ? snapToDB(raw) : raw;
-      return { weight: final.toFixed(1), reps: rr.reps, source: "estimated", oneRM: est1RM, refFatigue: 0 };
+      return { weight: final.toFixed(1), reps: repsLabel, source: "estimated", oneRM: est1RM, refFatigue: 0 };
     }
   }
   // 4. BW exercises — return null weight but show reps
-  if (isBW) return { weight: null, reps: rr.reps, source: "bw", oneRM: null };
+  if (isBW) return { weight: null, reps: repsLabel, source: "bw", oneRM: null };
   return null;
 }
 
@@ -4527,10 +4798,10 @@ function getSmartSuggestionRaw(exName, goal, history, profileBaseline, data) {
 const ALL_EXERCISES_BY_MUSCLE = {
   Chest:     ["Push-Up","Diamond Push-Up","Dumbbell Bench Press","Barbell Bench Press","Close-Grip Bench Press","Dumbbell Fly","Resistance Band Press","Weighted Push-Up","Single-Arm DB Press"],
   Back:      ["Pull-Up","Chin-Up","Neutral Grip Pull-Up","Weighted Pull-Up","Weighted Chin-Up","Inverted Row","Dumbbell Row","Single-Arm Dumbbell Row","Barbell Row","EZ Bar Upright Row","Band Pull-Apart"],
-  Shoulders: ["Pike Push-Up","Dumbbell Shoulder Press","Overhead Press","EZ Bar Upright Row"],
+  Shoulders: ["Lateral Raise","Band Lateral Raise","Prone Y-Raise","Pike Push-Up","Dumbbell Shoulder Press","Overhead Press","EZ Bar Upright Row"],
   Arms:      ["Dumbbell Curl","EZ Bar Curl","EZ Bar Reverse Curl","Tricep Dips","Weighted Dip","EZ Bar Skull Crusher","Tricep Overhead Ext","Close-Grip Bench Press"],
-  Legs:      ["Squat","Barbell Squat","Bulgarian Split Squat","Lunge","Romanian Deadlift","Single-Leg RDL","Goblet Squat","Barbell Deadlift","Banded Squat","Calf Raise","Single-Leg Glute Bridge","Balance Disc Squat"],
-  Core:      ["Plank","Dead Bug","Ab Wheel Rollout","Bicycle Crunch","Balance Disc Plank"],
+  Legs:      ["Squat","Barbell Squat","Bulgarian Split Squat","Lunge","Romanian Deadlift","Single-Leg RDL","Goblet Squat","Barbell Deadlift","Banded Squat","Calf Raise","Single-Leg Calf Raise","Sliding Leg Curl","Single-Leg Glute Bridge","Balance Disc Squat"],
+  Core:      ["Plank","Dead Bug","Side Plank","Pallof Press","Ab Wheel Rollout","Bicycle Crunch","Balance Disc Plank"],
 };
 
 // ── Favourites Screen ─────────────────────────────────────────────────────────
@@ -4576,9 +4847,7 @@ function CalendarScreen({ data, setData }) {
   const [expandedSession, setExpandedSession] = useState(null); // "date" key
   const history = data.history || [];
   const split = data.split || [];
-  const lastTraining = history.find(h => h.day !== "Stretch");
-  const lastIdx = lastTraining ? split.indexOf(lastTraining.day) : -1;
-  const nextDay = split[(lastIdx + 1) % split.length];
+  const nextDay = pickNextDay(split, history).day;
 
   // Rolling 28-day window, grouped into Mon-starting weeks
   const now = new Date();
@@ -5048,7 +5317,8 @@ function StatsScreen({ data }) {
             MEV = min effective · MRV = max recoverable · Fatigue from RIR trend · SFR = stimulus/fatigue
           </div>
           {Object.entries(MRV_TARGETS).map(([muscle, { mev, mrv }]) => {
-            const sets = weeklySets[muscle] || 0;
+            // Synergist sets count half, so totals can be fractional.
+            const sets = Math.round((weeklySets[muscle] || 0) * 10) / 10;
             const fatigue = getMuscleRIRFatigue(muscle, history);
             const sfr = getMuscleWeeklySFR(muscle, history, weeklySets);
             const mevPct = (mev/mrv)*100;
@@ -5059,7 +5329,7 @@ function StatsScreen({ data }) {
             return (
               <div key={muscle} style={{ ...S.card, marginBottom:8, padding:"12px 14px" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
-                  <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14, textTransform:"uppercase" }}>{muscle}</span>
+                  <span style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:14, textTransform:"uppercase" }}>{muscleLabel(muscle)}</span>
                   <div style={{ display:"flex", gap:10, alignItems:"baseline" }}>
                     {sfr !== null && (
                       <span style={{ fontFamily:"var(--font-m)", fontSize:9, color:"var(--muted)" }}>SFR {sfr}</span>
@@ -5094,7 +5364,7 @@ function StatsScreen({ data }) {
                 )}
                 {fatigue !== null && fatigue >= 0.75 && (
                   <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--red)", marginTop:2 }}>
-                    RIR trend shows high fatigue for {muscle}
+                    RIR trend shows high fatigue for {muscleLabel(muscle)}
                   </div>
                 )}
               </div>
@@ -5292,12 +5562,16 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
   const [mode, setMode] = useState(data.activeMode || DEFAULT_MODE);
   const isWeights = isWeightsMode(mode);
 
-  // Smart next day suggestion (skip stretch sessions for split logic)
-  const lastTrainingSession = history.find(h => h.day !== "Stretch");
+  // Next day: the one done longest ago, moved back if it would load the spine
+  // too soon after the last squat/RDL day (see pickNextDay).
   const lastSession = history[0];
-  const lastIdx = lastTrainingSession ? split.indexOf(lastTrainingSession.day) : -1;
-  const suggestedDay = split[(lastIdx + 1) % split.length] || split[0];
+  const nextPick = pickNextDay(split, history);
+  const suggestedDay = nextPick.day || split[0];
   const activeDay = selectedDay || suggestedDay;
+  // Picked anyway, too close to the last loaded-spine session: offer the
+  // no-axial-load version of today's spine lifts.
+  const spineGap = daysSinceSpine(history);
+  const spineSwaps = (spineGap != null && spineGap < SPINE_MIN_GAP && isWeights) ? spineSwapsFor(activeDay) : {};
 
   // Days trained this week (stretch sessions don't count toward weekly target)
   const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - weekStart.getDay()); weekStart.setHours(0,0,0,0);
@@ -5602,6 +5876,29 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
         📋 {_plannedCount} exercises planned — {isWeights ? "weights" : "rep targets"} adjusted from your last {isWeights ? "" : modeLabel(mode) + " "}{activeDay} RIR
       </div>
     )}
+
+    {!selectedDay && nextPick.reason && (
+      <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)", marginBottom:10 }}>
+        ↻ {nextPick.reason}
+      </div>
+    )}
+    {Object.keys(spineSwaps).length > 0 && (() => {
+      const pending = Object.entries(spineSwaps).filter(([from, to]) => override.replaced[from] !== to && !override.removed.includes(from));
+      return (
+        <div style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.35)", borderRadius:6, padding:"8px 12px", marginBottom:14 }}>
+          <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--red)", marginBottom: pending.length ? 8 : 0 }}>
+            Loaded spine {spineGap} day{spineGap === 1 ? "" : "s"} ago — {SPINE_MIN_GAP}+ protects the disc.
+            {pending.length ? "" : " Swapped for today."}
+          </div>
+          {pending.length > 0 && (
+            <button style={{ ...S.btnSm, fontSize:11 }}
+              onClick={() => setOverride({ replaced: { ...override.replaced, ...Object.fromEntries(pending) } })}>
+              Swap {pending.map(([from, to]) => `${from} → ${to}`).join(", ")}
+            </button>
+          )}
+        </div>
+      );
+    })()}
 
     <button style={{ ...S.btnSm, width:"100%", marginBottom:10, display:"flex", justifyContent:"space-between", alignItems:"center" }}
       onClick={() => { setShowAdjust(a => !a); setShowAltsFor(null); }}>

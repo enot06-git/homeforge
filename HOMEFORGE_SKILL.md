@@ -114,31 +114,69 @@ of logic looks the way it does.
 `SPLITS[3]` is the A/B/C rotation; `SPLITS[2]` is A/B. PPL day templates still
 exist and are reachable via `SPLITS[5]`, but are no longer the 3-day default.
 
-|  | A — squat | B — unilateral | C — hinge |
-|---|---|---|---|
-| Lower | Barbell Squat | Bulgarian Split Squat | **Romanian Deadlift** |
-| H push | Bench Press | Weighted Dip | DB Bench Press |
-| H pull | Single-Arm DB Row | Inverted Row | DB Row |
-| Other | DB Shoulder Press | DB Shoulder Press | Assisted Pull-Up |
-| Rear delt | Face Pull | Face Pull | Face Pull |
-| Core | Dead Bug | Ab Wheel Rollout | EZ Bar Curl |
+Revised Oct 2026 after a 30-day review (Sep 9 – Oct 7, 11 Full Body sessions):
 
-**Three rules hold across all three templates. Preserve them when editing:**
+| Slot | A — squat | B — unilateral | C — hinge |
+|---|---|---|---|
+| Primer (first, RIR 3+) | Dead Bug | Side Plank | — |
+| Lower | Barbell Squat | Bulgarian Split Squat | **Romanian Deadlift** |
+| Superset 1 (pull first) | SA DB Row ⇄ Bench Press | Inverted Row ⇄ Weighted Dip | Assisted Pull-Up ⇄ DB Bench Press |
+| Superset 2 | Lateral Raise ⇄ Face Pull | Chin-Up ⇄ Lateral Raise | DB Row ⇄ Face Pull |
+| Superset 3 | — | Face Pull ⇄ Prone Y-Raise | Lateral Raise ⇄ Prone Y-Raise |
+| Finisher | Sliding Leg Curl | Single-Leg Calf Raise | EZ Bar Curl |
+
+Template fields: `primer:true` (trunk bracing before the main lift) and
+`pair:n` (superset partners; `WorkoutScreen` names the partner on each card).
+
+**Rules that hold across all three templates. Preserve them when editing:**
 1. **Horizontal pull ≥ horizontal push in every session.** One press, one row.
 2. **Face Pull in every session.** Rear delt work was 1.1 sets/week.
-3. **The loaded hinge appears in C only, and the ORDER matters.** B carries no
-   axial load, so it separates A's squat from C's hinge. Running the hinge in B
-   would put loaded-spine work 2 days after the squat every week once the athlete
-   actually trains 3x/week. A→B→C spaces them 4 and 3 days, which is the best
-   achievable with two loaded-spine sessions in a three-session week. **Do not
-   reorder the split array or move the hinge.**
+3. **The loaded hinge appears in C only.** B carries no axial load and separates
+   A's squat from C's hinge. **Do not move the hinge.**
+4. **Pull before press inside every superset.** 4 of 11 sessions were cut short
+   and the cut always took what came last (Sep 30: pull:push 0).
+5. **No overhead press.** Front delts ran ~10 sets/wk against ~2.6 for side
+   delts — bad for the posture. Chest pressing covers front delts; Lateral Raise
+   covers side delts; B's vertical slot is a Chin-Up (vertical push:pull was 20:9).
+6. **Core work is a primer, never a finisher.** Ab wheel last ran to RIR 1 with
+   reps falling 8 → 6 — where a tired rollout tips into lumbar extension.
 
-Measured on the rotation: pull:push **2.00:1**, loaded hinge **1 of 3 sessions**,
-loaded-spine spacing on a Mon/Wed/Fri week **4, 3, 4, 3, 4 days** (min 3).
+### Which session is next — `pickNextDay()`
+"Last + 1" broke twice in the 30-day log: A was repeated after a cut session so
+C went 10+ days undone, and C → A landed **1 and 2 days apart** (RDL then squat)
+because real weeks are not Mon/Wed/Fri.
+- Next = the day done **longest ago** (never-done first, ties in split order).
+- If the last loaded-spine session (`LOADED_SPINE`) was under `SPINE_MIN_GAP = 3`
+  days ago and that day loads the spine, a non-axial day goes first, with a
+  "↻ moved back" note on Home.
+- If the user picks a spine day anyway, Home shows a red warning with a one-tap
+  swap from `spineSwapsFor(day)`: Squat → Goblet Squat, RDL → Single-Leg RDL.
+- Used by HomeScreen and CalendarScreen.
 
-It is a rotation, not a repeat — at 3 days/week every muscle is hit 3× but no
-exercise recurs within the week. At the real ~2 days/week it simply cycles
-A→B→C→A across weeks, so a missed day costs nothing structurally.
+### Loaded-spine lifts — RIR 3 (athlete's explicit choice)
+`LOADED_SPINE` = Barbell Squat, Barbell Deadlift, Romanian Deadlift, Good
+Morning, Barbell Row, Barbell Bent-Over Row. The athlete does not take these
+near failure, to protect the lumbar disc. Both RIR-1 sets in the 30-day log
+were the 4th set.
+- `SPINE_TARGET_RIR = 3`, `SPINE_MAX_SETS = 3`, `SPINE_REPS = "6-10"`
+- `calcNextSessionPlan` judges them by the **hardest** set (min RIR), not the
+  average: any set ≤1 → back off 5kg; any set at 2 → hold weight and reps;
+  every set ≥3 at the top of the range → +5kg (never the 10kg jump)
+- Intensification sizes them at the 9-rep-max load for 6 reps; with no plan the
+  suggestion never exceeds the last weight lifted (`getBestRecord` mixes best
+  weight and best reps from different sets and overshoots)
+- Card: "lower back · RIR 3" tag, and an inline warning on any set logged < RIR 3
+- Coach prompt: never suggest pushing them closer to failure or adding sets
+
+### Muscle accounting
+- Shoulders are split: `frontDelt` (MEV 0), `sideDelt`, `rearDelt`, plus
+  `lowerTraps` and `obliques` in `MRV_TARGETS` (`label` for display)
+- `getMuscleWeeklySets` credits every muscle in `MOVERS`: prime mover 1 set,
+  synergist 0.5 (`muscleCredit`). Lats + upper back count once as `back`.
+- Training context gives the coach front/side/rear delt and lower-trap sets/wk
+  and the count of loaded-spine sets below RIR 3
+
+---
 
 ---
 
@@ -246,8 +284,10 @@ layoff.
 
 1. **Discuss plan → wait for confirmation → then code** — no surprise changes
 2. **Never change** `STORAGE_KEY = "homeforge_data"` — instant data loss
-3. **Preserve the three template rules** (pull ≥ push, face pull every session,
-   hinge in B only). They exist for the managed conditions, not for symmetry.
+3. **Preserve the template rules** (pull ≥ push, face pull every session,
+   hinge in C only, pull first in supersets, no overhead press, core as primer)
+   and the loaded-spine RIR-3 rule. They exist for the managed conditions, not
+   for symmetry.
 4. **`npm run validate` after touching data structures, weight logic or templates**
 5. Prefer targeted edits over full rewrites
 6. **Verify in the browser** before claiming a change works — and if you log a
@@ -256,7 +296,7 @@ layoff.
 ## Validator status (current build)
 ```
 validate.js          ✅ 101   ⚠️ 9 warnings   ❌ 2 errors
-validate-modes.mjs   ✅ 65    ❌ 0 failures
+validate-modes.mjs   ✅ 152   ❌ 0 failures
 validate-stretch.mjs ✅ 37    ❌ 0 failures
 ```
 The 2 errors and 9 warnings are pre-existing and non-critical: CORS/sandbox

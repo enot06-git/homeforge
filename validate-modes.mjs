@@ -36,6 +36,8 @@ export const __t = {
   dedupHistory, detectRecentPR, shouldDeload, reconcileMesocycle, getDayType,
   formatWeightDisplay, calcPlates, TECHNIQUE, EXERCISE_DB,
   DAY_TEMPLATES, DUMBBELL_EX, loadTypeOf, fitToInventory, preFatigue,
+  pickNextDay, spineSwapsFor, getMuscleWeeklySets, isLoadedSpine, MRV_TARGETS,
+  SPINE_TARGET_RIR, HORIZ_PUSH, HORIZ_PULL,
 };
 `;
 
@@ -288,15 +290,20 @@ eq("each has setup/movement/feel/mistake", badCues, []);
 // ── Test 16: Full Body A/B/C — base lifts first ──────────────────────────────
 console.log("\n📋 TEST 16: Full Body A/B/C Put Base Lifts First");
 // Accessories: single-joint, rear-delt band work, core. Nothing loaded and
-// multi-joint may follow one of these.
+// multi-joint may follow one of these. A `primer` (light trunk bracing before
+// the main lift) is the one thing allowed ahead of the base lifts.
 const ACCESSORY = new Set(["Face Pull","Band Pull-Apart","EZ Bar Curl","Dumbbell Curl","EZ Bar Reverse Curl",
-  "Dumbbell Fly","EZ Bar Skull Crusher","Tricep Overhead Ext","Calf Raise",
-  "Dead Bug","Plank","Ab Wheel Rollout","Bicycle Crunch","Thoracic Extension"]);
+  "Dumbbell Fly","EZ Bar Skull Crusher","Tricep Overhead Ext","Calf Raise","Single-Leg Calf Raise",
+  "Lateral Raise","Band Lateral Raise","Prone Y-Raise","Sliding Leg Curl",
+  "Dead Bug","Plank","Side Plank","Pallof Press","Ab Wheel Rollout","Bicycle Crunch","Thoracic Extension"]);
+const fb = (day) => T.getExercisesForDay(day, DATA.equipment, "hypertrophy", {}, "Intermediate", "weights");
 for (const day of ["Full Body A","Full Body B","Full Body C"]) {
-  const names = T.getExercisesForDay(day, DATA.equipment, "hypertrophy", {}, "Intermediate", "weights").map(e => e.name);
+  const names = fb(day).filter(e => !e.primer).map(e => e.name);
   const firstAcc = names.findIndex(n => ACCESSORY.has(n));
   const lateBase = names.slice(firstAcc).filter(n => !ACCESSORY.has(n));
   ok(`${day}: no base lift after an accessory`, firstAcc > 0 && !lateBase.length, names.join(" → "));
+  const primers = fb(day).map((e, i) => e.primer ? i : -1).filter(i => i >= 0);
+  ok(`${day}: a primer only ever opens the session`, primers.every(i => i === 0), primers.join(","));
 }
 
 // ── Test 17: dumbbell targets stay on the rack ────────────────────────────────
@@ -355,6 +362,94 @@ eq("plan earned fresh, now after the bench → next dumbbell down",
 const planOut = T.calcNextSessionPlan("Full Body A", sameSlot[0].log, "hypertrophy", DATA).plan;
 eq("new plans record the fatigue they were earned under", planOut["Dumbbell Shoulder Press"].fatigue, 0.10);
 eq("Full Body C shares the full-body plan bucket", T.getDayType("Full Body C"), "fullbody");
+
+// ── Test 19: the template rules, re-checked on the Oct 2026 templates ────────
+console.log("\n📋 TEST 19: Full Body Template Rules");
+const SPINE_DAYS = { "Full Body A":["Barbell Squat"], "Full Body B":[], "Full Body C":["Romanian Deadlift"] };
+for (const day of ["Full Body A","Full Body B","Full Body C"]) {
+  const ex = fb(day), names = ex.map(e => e.name);
+  const push = names.filter(n => T.HORIZ_PUSH.includes(n)).length;
+  const pull = names.filter(n => T.HORIZ_PULL.includes(n)).length;
+  ok(`${day}: horizontal pull >= push`, pull >= push, `${pull} vs ${push}`);
+  ok(`${day}: Face Pull every session`, names.includes("Face Pull"));
+  eq(`${day}: loaded-spine lifts`, names.filter(T.isLoadedSpine), SPINE_DAYS[day]);
+  ok(`${day}: no overhead press`, !names.some(n => ["Dumbbell Shoulder Press","Overhead Press"].includes(n)), names.join(", "));
+  ok(`${day}: side delts trained`, names.includes("Lateral Raise"));
+  const pairs = {};
+  ex.forEach((e, i) => { if (e.pair) (pairs[e.pair] ??= []).push([i, e.name]); });
+  for (const [id, members] of Object.entries(pairs)) {
+    eq(`${day} pair ${id}: exactly two, adjacent`, members.length === 2 && members[1][0] - members[0][0] === 1, true);
+    const pushIdx = members.findIndex(([, n]) => T.HORIZ_PUSH.includes(n));
+    if (pushIdx >= 0) eq(`${day} pair ${id}: pull before press`, pushIdx, 1);
+  }
+}
+eq("B has no barbell row fallback", T.DAY_TEMPLATES["Full Body B"].some(e => (e.alts || []).includes("Barbell Row")), false);
+
+// ── Test 20: loaded-spine lifts stay at RIR 3 ────────────────────────────────
+console.log("\n📋 TEST 20: Loaded-Spine Lifts Stay Clear Of Failure");
+const squat = (sets) => ({ "Barbell Squat": sets.map(([w, r, rir]) => ({ weight:String(w), reps:String(r), rpe:String(rir) })) });
+const sqPlan = (sets) => T.calcNextSessionPlan("Full Body A", squat(sets), "hypertrophy", DATA).plan["Barbell Squat"];
+const hidden = sqPlan([[84,8,3],[84,8,2],[84,8,2],[84,8,1]]);
+eq("3,2,2,1 (avg 2): the RIR-1 set backs the load off", hidden.targetWeight, 79);
+eq("...and reports the hardest set, not the average", hidden.lastRIR, 1);
+const atTwo = sqPlan([[84,8,2],[84,8,2],[84,8,2]]);
+eq("all sets RIR 2: hold the weight", atTwo.targetWeight, 84);
+eq("...and do not ask for another rep", atTwo.targetReps, 8);
+const easy = sqPlan([[84,8,3],[84,8,3],[84,8,4]]);
+eq("all sets RIR 3+, reps short of the top: hold, one more rep", [easy.targetWeight, easy.targetReps], [84, 9]);
+const ready = sqPlan([[84,10,3],[84,10,3],[84,10,3]]);
+eq("all sets RIR 3 at the top of 6-10: small step up, back to 6", [ready.targetWeight, ready.targetReps], [89, 6]);
+eq("never the big jump, however easy", sqPlan([[84,10,5],[84,10,5],[84,10,5]]).targetWeight, 89);
+eq("prescribed reserve is RIR 3", ready.targetRIR, T.SPINE_TARGET_RIR);
+const benchPlan = T.calcNextSessionPlan("Full Body A", { "Barbell Bench Press":[{weight:"64",reps:"8",rpe:"2"},{weight:"64",reps:"8",rpe:"2"}] }, "hypertrophy", DATA).plan["Barbell Bench Press"];
+eq("bench is unaffected: RIR 2, one more rep", [benchPlan.targetWeight, benchPlan.targetReps, benchPlan.targetRIR], [64, 9, 2]);
+const oldPlan = { ...DATA, activeMode:"weights", nextSession:{ fullbody:{ "Barbell Squat":{ type:"weight", targetWeight:84, targetReps:9, lastRIR:2, targetRIR:2, source:"rir", fatigue:0 } } } };
+eq("a plan stored before the rule still shows RIR 3", T.getSmartSuggestion("Barbell Squat","hypertrophy",[],null,oldPlan,["Dead Bug"]).planTargetRIR, 3);
+eq("...and the 6-10 window", T.getSmartSuggestion("Barbell Squat","hypertrophy",[],null,oldPlan).reps, "6-10");
+const fromLog = T.getSmartSuggestion("Barbell Squat","hypertrophy",
+  [{ date:"2026-09-01", day:"Full Body A", mode:"weights", log: squat([[84,8,2]]) }],null,DATA);
+ok("an unplanned squat is sized below its logged 8-rep load (reserve built in)", parseFloat(fromLog.weight) < 84, fromLog.weight);
+
+// ── Test 21: which session is next ───────────────────────────────────────────
+console.log("\n📋 TEST 21: Next Session — Oldest First, Spine Spacing");
+const SPLIT3 = ["Full Body A","Full Body B","Full Body C"];
+const sess = (date, day, ex) => ({ date, day, mode:"weights",
+  log: ex ? { [ex]:[{ weight:"80", reps:"8", rpe:"3" }] } : { "Face Pull":[{ reps:"12", rpe:"2" }] } });
+const octHist = [sess("2026-10-03","Full Body B"), sess("2026-09-30","Full Body A","Barbell Squat"), sess("2026-09-27","Full Body C","Romanian Deadlift")];
+eq("Oct 5: C was due, not a second A", T.pickNextDay(SPLIT3, octHist, "2026-10-05").day, "Full Body C");
+const septHist = [sess("2026-09-12","Full Body C","Romanian Deadlift"), sess("2026-09-10","Full Body B"), sess("2026-09-08","Full Body A","Barbell Squat")];
+const sep13 = T.pickNextDay(SPLIT3, septHist, "2026-09-13");
+eq("Sep 13 (RDL yesterday): A moves back, B goes first", sep13.day, "Full Body B");
+ok("...and says why", /1 day ago/.test(sep13.reason || ""), sep13.reason);
+eq("Sep 15 (3 days on): A is fine again", T.pickNextDay(SPLIT3, septHist, "2026-09-15").day, "Full Body A");
+eq("empty history starts at the top of the split", T.pickNextDay(SPLIT3, [], "2026-09-15").day, "Full Body A");
+eq("stretch sessions do not count",
+   T.pickNextDay(SPLIT3, [{ date:"2026-10-04", day:"Stretch", log:{} }, ...octHist], "2026-10-05").day, "Full Body C");
+eq("A's no-axial-load swap", T.spineSwapsFor("Full Body A"), { "Barbell Squat":"Goblet Squat" });
+eq("C's no-axial-load swap", T.spineSwapsFor("Full Body C"), { "Romanian Deadlift":"Single-Leg RDL" });
+eq("B needs none", T.spineSwapsFor("Full Body B"), {});
+
+// ── Test 22: muscle accounting ───────────────────────────────────────────────
+console.log("\n📋 TEST 22: Muscle Groups — Delts Split, Synergists Counted");
+const three = (ex) => ({ [ex]: [1,2,3].map(() => ({ weight:"10", reps:"10", rpe:"2" })) });
+const benchSets = T.getMuscleWeeklySets([{ log: three("Barbell Bench Press") }]);
+// Pressing is a full front-delt set (that is why front-delt MEV is 0); triceps a synergist.
+eq("3 bench sets: chest 3, front delts 3, triceps 1.5", [benchSets.chest, benchSets.frontDelt, benchSets.triceps], [3, 3, 1.5]);
+eq("lateral raise → side delts", T.getMuscleWeeklySets([{ log: three("Lateral Raise") }]).sideDelt, 3);
+eq("row counts back once, not twice (lats + upper back)", T.getMuscleWeeklySets([{ log: three("Dumbbell Row") }]).back, 3);
+eq("side plank seconds count as sets",
+   T.getMuscleWeeklySets([{ log: { "Side Plank":[{ seconds:"30", rpe:"3" },{ seconds:"30", rpe:"3" }] } }]).obliques, 2);
+eq("Face Pull → rear delts", T.EXERCISE_TO_MUSCLE_GROUP["Face Pull"], "rearDelt");
+eq("Lateral Raise → side delts", T.EXERCISE_TO_MUSCLE_GROUP["Lateral Raise"], "sideDelt");
+eq("Dumbbell Shoulder Press → front delts", T.EXERCISE_TO_MUSCLE_GROUP["Dumbbell Shoulder Press"], "frontDelt");
+eq("Prone Y-Raise → lower traps", T.EXERCISE_TO_MUSCLE_GROUP["Prone Y-Raise"], "lowerTraps");
+eq("every mapped group has a volume target",
+   [...new Set(Object.values(T.EXERCISE_TO_MUSCLE_GROUP))].filter(g => !T.MRV_TARGETS[g]), []);
+const NEW_EX = ["Lateral Raise","Band Lateral Raise","Prone Y-Raise","Sliding Leg Curl","Single-Leg Calf Raise","Side Plank","Pallof Press"];
+eq("new exercises have full technique cues",
+   NEW_EX.filter(n => ["setup","movement","feel","mistake"].some(f => !T.TECHNIQUE[n]?.[f])), []);
+eq("loaded lateral raise, Y-raise and calf raise use the dumbbell rack",
+   ["Lateral Raise","Prone Y-Raise","Single-Leg Calf Raise"].map(T.loadTypeOf), ["dumbbell","dumbbell","dumbbell"]);
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log("\n" + "═".repeat(60));
