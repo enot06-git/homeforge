@@ -38,6 +38,7 @@ export const __t = {
   DAY_TEMPLATES, DUMBBELL_EX, loadTypeOf, fitToInventory, preFatigue,
   pickNextDay, spineSwapsFor, getMuscleWeeklySets, isLoadedSpine, MRV_TARGETS,
   SPINE_TARGET_RIR, HORIZ_PUSH, HORIZ_PULL,
+  mergeSessionPlan, rebuildPlans, swapOptions, ALT_GROUPS, BAND_EX, stepBand,
 };
 `;
 
@@ -295,7 +296,7 @@ console.log("\n📋 TEST 16: Full Body A/B/C Put Base Lifts First");
 const ACCESSORY = new Set(["Face Pull","Band Pull-Apart","EZ Bar Curl","Dumbbell Curl","EZ Bar Reverse Curl",
   "Dumbbell Fly","EZ Bar Skull Crusher","Tricep Overhead Ext","Calf Raise","Single-Leg Calf Raise",
   "Lateral Raise","Band Lateral Raise","Prone Y-Raise","Sliding Leg Curl",
-  "Dead Bug","Plank","Side Plank","Pallof Press","Ab Wheel Rollout","Bicycle Crunch","Thoracic Extension"]);
+  "Dead Bug","Plank","Side Plank","Pallof Press","Ab Wheel Rollout","Bicycle Crunch","Thoracic Extension","EZ Bar 21s"]);
 const fb = (day) => T.getExercisesForDay(day, DATA.equipment, "hypertrophy", {}, "Intermediate", "weights");
 for (const day of ["Full Body A","Full Body B","Full Body C"]) {
   const names = fb(day).filter(e => !e.primer).map(e => e.name);
@@ -303,7 +304,7 @@ for (const day of ["Full Body A","Full Body B","Full Body C"]) {
   const lateBase = names.slice(firstAcc).filter(n => !ACCESSORY.has(n));
   ok(`${day}: no base lift after an accessory`, firstAcc > 0 && !lateBase.length, names.join(" → "));
   const primers = fb(day).map((e, i) => e.primer ? i : -1).filter(i => i >= 0);
-  ok(`${day}: a primer only ever opens the session`, primers.every(i => i === 0), primers.join(","));
+  ok(`${day}: primers only ever open the session`, primers.every((p, i) => p === i), primers.join(","));
 }
 
 // ── Test 17: dumbbell targets stay on the rack ────────────────────────────────
@@ -450,6 +451,134 @@ eq("new exercises have full technique cues",
    NEW_EX.filter(n => ["setup","movement","feel","mistake"].some(f => !T.TECHNIQUE[n]?.[f])), []);
 eq("loaded lateral raise, Y-raise and calf raise use the dumbbell rack",
    ["Lateral Raise","Prone Y-Raise","Single-Leg Calf Raise"].map(T.loadTypeOf), ["dumbbell","dumbbell","dumbbell"]);
+
+// ── Test 23: live plans reach the card ───────────────────────────────────────
+// Nov 2026 review: plans frozen since Sep 12 overrode the live ones, each session
+// erased the others' plans, and the rep target was never shown.
+console.log("\n📋 TEST 23: The Current Plan Is The One Read");
+const planOf = (w, r) => ({ targetWeight:w, targetReps:r, targetRIR:2, lastRIR:2, source:"rir", type:"weight" });
+const staleData = { ...DATA, activeMode:"weights", activeDay:"Full Body A", nextSession:{
+  push:{ "Barbell Bench Press": planOf(75,12) }, fullbody:{ "Barbell Bench Press": planOf(64,9) } } };
+const liveSug = T.getSmartSuggestion("Barbell Bench Press","hypertrophy",[],null,staleData);
+eq("a frozen Push plan cannot override the Full Body plan", liveSug.weight, "64.0");
+eq("...and the card gets the exact rep target", liveSug.targetReps, 9);
+const noLive = { ...staleData, nextSession:{ push:{ "Barbell Bench Press": planOf(75,12) } } };
+ok("with no live plan the stale one is still ignored",
+   T.getSmartSuggestion("Barbell Bench Press","hypertrophy",[{date:"2026-10-01",day:"Full Body A",mode:"weights",log:{"Barbell Bench Press":[{weight:"64",reps:"8",rpe:"2"}]}}],null,noLive).source === "log");
+const merged = T.mergeSessionPlan({ fullbody:{ "Barbell Squat": planOf(84,7) } }, "fullbody", { "Inverted Row":{ targetReps:9, type:"reps" } }, "accumulation");
+ok("B's save keeps A's squat plan", !!merged.fullbody["Barbell Squat"] && !!merged.fullbody["Inverted Row"]);
+const beforeDeload = { fullbody:{ "Barbell Squat": planOf(84,7) } };
+eq("a deload changes no plan", T.mergeSessionPlan(beforeDeload, "fullbody", { "Barbell Squat": planOf(94,6) }, "deload"), beforeDeload);
+const rebuilt = T.rebuildPlans({ fullbody:{ "Romanian Deadlift": { ...planOf(89,7), source:"ai_proposal" } } }, [
+  { date:"2026-10-27", day:"Full Body A", mode:"weights", log:{ "Barbell Squat":[{weight:"84",reps:"6",rpe:"4"},{weight:"84",reps:"6",rpe:"4"},{weight:"84",reps:"6",rpe:"3"}] } },
+  { date:"2026-10-20", day:"Full Body A", mode:"weights", phase:"deload", log:{ "Weighted Dip":[{weight:"20",reps:"8",rpe:"4"}] } },
+  { date:"2026-10-19", day:"Full Body A", mode:"trx", log:{ "TRX Low Row":[{reps:"12",rpe:"2"}] } },
+], DATA);
+eq("rebuild restores the erased squat plan", [rebuilt.fullbody["Barbell Squat"].targetWeight, rebuilt.fullbody["Barbell Squat"].targetReps], [84, 7]);
+eq("...what is already stored wins", rebuilt.fullbody["Romanian Deadlift"].source, "ai_proposal");
+const replayed = T.rebuildPlans({}, [
+  { date:"2026-10-27", day:"Full Body A", mode:"weights", log:{ "Single-Arm Dumbbell Row":[{weight:"24",reps:"10",rpe:"2"},{weight:"24",reps:"8",rpe:"3"}] } },
+  { date:"2026-10-16", day:"Full Body A", mode:"weights", log:{ "Single-Arm Dumbbell Row":[{weight:"24",reps:"12",rpe:"2"},{weight:"24",reps:"12",rpe:"2"}] } },
+], DATA);
+eq("...old sessions do not switch tempo on", [!!replayed.fullbody["Single-Arm Dumbbell Row"].tempo, replayed.fullbody["Single-Arm Dumbbell Row"].targetReps], [false, 10]);
+eq("...deloads and TRX are not replayed", [!!rebuilt.fullbody["Weighted Dip"], !!rebuilt.fullbody["TRX Low Row"]], [false, false]);
+
+// ── Test 24: only lifted sets count ──────────────────────────────────────────
+console.log("\n📋 TEST 24: Sets Never Lifted Do Not Count");
+const ghost = { "Barbell Bench Press":[{weight:"54",reps:"12",rpe:"3"},{weight:"54",reps:"12",rpe:"3"},{weight:"54",reps:"12",rpe:"3"},{weight:"74.0",reps:"",rpe:""}] };
+eq("Oct 16: 54kg x 12 plus an empty 74kg pre-fill plans from 54, not 79",
+   T.calcNextSessionPlan("Full Body A", ghost, "hypertrophy", DATA).plan["Barbell Bench Press"].targetWeight, 59);
+const mixed = [{ date:"2026-10-01", day:"Full Body C", mode:"weights", log:{ "EZ Bar Curl":[{weight:"33",reps:"8",rpe:"2"},{weight:"18",reps:"21",rpe:"2"},{weight:"90",reps:"",rpe:""}] } }];
+eq("best record is one real set, not 33kg paired with 21 reps", T.getBestRecord("EZ Bar Curl", mixed, null), { weight:33, reps:8 });
+
+// ── Test 25: the ceiling ladder ──────────────────────────────────────────────
+console.log("\n📋 TEST 25: Heaviest Load Reached — Reps, Tempo, Then A Variation");
+const dbb = (reps, rir, prev) => T.calcNextSessionPlan("Full Body C",
+  { "Dumbbell Bench Press":[1,2,3].map(() => ({ weight:"24", reps:String(reps), rpe:String(rir) })) }, "hypertrophy",
+  { ...DATA, nextSession:{ fullbody:{ "Dumbbell Bench Press": prev || {} } } }).plan["Dumbbell Bench Press"];
+const easyLow = dbb(8, 4);
+eq("24kg x 8 at RIR 4: reps climb by two", [easyLow.targetWeight, easyLow.targetReps, !!easyLow.tempo], [24, 10, false]);
+const firstTop = dbb(12, 3);
+eq("24kg x 12: tempo starts, back to the bottom of the range", [firstTop.targetWeight, firstTop.targetReps, firstTop.tempo], [24, 8, true]);
+eq("reps under tempo keep the tempo on", dbb(9, 2, { tempo:true }).tempo, true);
+const tempoTop = dbb(12, 2, { tempo:true });
+eq("top of the range at tempo: the variation is suggested", [tempoTop.ceilingAlt, tempoTop.targetReps], ["Barbell Bench Press", 12]);
+const failing = dbb(8, 1, { tempo:true });
+eq("RIR 1 still backs the load off and clears the tempo", [failing.targetWeight, !!failing.tempo], [22.5, false]);
+const dipTop = T.calcNextSessionPlan("Full Body B", { "Weighted Dip":[{weight:"20",reps:"12",rpe:"2"},{weight:"20",reps:"12",rpe:"2"}] }, "hypertrophy", DATA).plan["Weighted Dip"];
+eq("the belt limit is a ceiling too", [dipTop.targetWeight, dipTop.targetReps, dipTop.tempo], [20, 8, true]);
+const below = T.calcNextSessionPlan("Full Body C", { "Dumbbell Row":[{weight:"22.5",reps:"12",rpe:"2"},{weight:"22.5",reps:"12",rpe:"2"}] }, "hypertrophy", DATA).plan["Dumbbell Row"];
+eq("below the rack limit, load still moves first", [below.targetWeight, !!below.tempo], [24, false]);
+const tempoTarget = T.getSmartSuggestion("Dumbbell Bench Press","hypertrophy",[],null,{ ...DATA, activeMode:"weights", nextSession:{ fullbody:{ "Dumbbell Bench Press":firstTop } } });
+eq("the card is told about the tempo", [tempoTarget.tempo, tempoTarget.targetReps], [true, 8]);
+
+// ── Test 26: 21s ─────────────────────────────────────────────────────────────
+console.log("\n📋 TEST 26: 21s Are Their Own Exercise");
+const EZ_DATA = { ...DATA, ezbarWeight:"8", ezbarPlates:"2x20, 2x15, 2x10, 2x5, 2x2.5", ezbarMax:"113", activeMode:"weights" };
+const curl21 = (w, reps, rirs) => T.calcNextSessionPlan("Full Body C",
+  { "EZ Bar 21s": reps.map((r, i) => ({ weight:String(w), reps:String(r), rpe:String(rirs[i]) })) }, "hypertrophy", EZ_DATA).plan["EZ Bar 21s"];
+eq("3 x 21 at RIR 2+: +5kg, back to 14", [curl21(18,[21,21,21],[2,2,3]).targetWeight, curl21(18,[21,21,21],[2,2,3]).targetReps], [23, 14]);
+eq("one short set holds the load", curl21(23,[21,14,14],[2,2,2]).targetWeight, 23);
+eq("a set at RIR 1 blocks the step", curl21(18,[21,21,21],[2,2,1]).targetWeight, 18);
+eq("an easy session never takes the big jump", curl21(18,[14,14,14],[5,5,5]).targetWeight, 18);
+eq("EZ Bar 21s opens at 18kg", T.getSmartSuggestion("EZ Bar 21s","hypertrophy",[],null,EZ_DATA).weight, "18.0");
+eq("Barbell 21s opens at 19kg", T.getSmartSuggestion("Barbell 21s","hypertrophy",[],null,DATA).weight, "19.0");
+eq("the opening load is not discounted for pre-fatigue", T.getSmartSuggestion("EZ Bar 21s","hypertrophy",[],null,EZ_DATA,["Assisted Pull-Up","Dumbbell Row"]).weight, "18.0");
+eq("21s are not loaded-spine lifts", ["EZ Bar 21s","Barbell 21s"].some(T.isLoadedSpine), false);
+eq("21s credit biceps", T.getMuscleWeeklySets([{ log: three("EZ Bar 21s") }]).biceps, 3);
+
+// ── Test 27: band progression ────────────────────────────────────────────────
+console.log("\n📋 TEST 27: Band Level Drives Band Progression");
+const bandPlan = (ex, reps, rir, band) => T.calcNextSessionPlan("Full Body A",
+  { [ex]:[1,2,3].map(() => ({ weight:"", reps:String(reps), rpe:String(rir), ...(band ? { band } : {}) })) }, "hypertrophy", DATA).plan[ex];
+const fpUp = bandPlan("Face Pull", 20, 3, "Medium");
+eq("Face Pull at the top of 12-20: next band, back to 12", [fpUp.targetBand, fpUp.targetReps, fpUp.bandMove], ["Heavy", 12, "harder"]);
+eq("mid-range: one more rep on the same band", [bandPlan("Face Pull", 14, 3, "Medium").targetBand, bandPlan("Face Pull", 14, 3, "Medium").targetReps], ["Medium", 15]);
+const noBand = bandPlan("Face Pull", 20, 3);
+eq("no level on record: says which way, names no band", [!!noBand.targetBand, noBand.bandMove], [false, "harder"]);
+const apHard = bandPlan("Assisted Pull-Up", 7, 1, "Medium");
+eq("Assisted Pull-Up at RIR 1: heavier band helps more", [apHard.targetBand, apHard.bandMove], ["Heavy", "easier"]);
+eq("Assisted Pull-Up at the top: lighter band is harder", bandPlan("Assisted Pull-Up", 12, 2, "Medium").targetBand, "Light");
+const bandSug = T.getSmartSuggestion("Face Pull","hypertrophy",[],null,{ ...DATA, activeMode:"weights", nextSession:{ fullbody:{ "Face Pull":fpUp } } });
+eq("the card gets the band and the rep target", [bandSug.band, bandSug.reps, bandSug.weight], ["Heavy", "12", null]);
+eq("the level does not count as load", T.getMuscleWeeklySets([{ log:{ "Face Pull":[{ reps:"12", rpe:"3", band:"Heavy" }] } }]).rearDelt, 1);
+
+// ── Test 28: posture in the templates ────────────────────────────────────────
+console.log("\n📋 TEST 28: Posture Work Comes Early And Pulling Leads");
+for (const day of ["Full Body A","Full Body B","Full Body C"]) {
+  const ex = fb(day), names = ex.map(e => e.name);
+  eq(`${day}: Thoracic Extension opens the session`, [names[0], ex[0].primer], ["Thoracic Extension", true]);
+  ok(`${day}: Prone Y-Raise every session`, names.includes("Prone Y-Raise"));
+  ok(`${day}: Face Pull and Y-Raise before the lateral raise`,
+     names.indexOf("Face Pull") < names.indexOf("Lateral Raise") && names.indexOf("Prone Y-Raise") < names.indexOf("Lateral Raise"), names.join(" → "));
+  const rowSets = ex.filter(e => T.HORIZ_PULL.includes(e.name) && e.name !== "Face Pull").map(e => e.sets);
+  const pressSets = ex.filter(e => T.HORIZ_PUSH.includes(e.name)).map(e => e.sets);
+  eq(`${day}: 4 row sets, 3 press sets`, [rowSets, pressSets], [[4], [3]]);
+}
+eq("thoracic work earns no working-set credit", T.getMuscleWeeklySets([{ log: three("Thoracic Extension") }]), {});
+eq("...and does not pre-fatigue the row", T.preFatigue("Dumbbell Row",["Thoracic Extension"]).pct, 0);
+eq("the C finisher is EZ Bar 21s", fb("Full Body C").at(-1).name, "EZ Bar 21s");
+
+// ── Test 29: built-in swaps ──────────────────────────────────────────────────
+console.log("\n📋 TEST 29: Built-In Swaps Respect The Managed Conditions");
+const allDb = Object.values(T.EXERCISE_DB).flat();
+const groupNames = [...new Set(Object.values(T.ALT_GROUPS).flat())];
+eq("every swap exercise exists in the DB", groupNames.filter(n => !allDb.some(e => e.name === n)), []);
+const NEW_SWAP_EX = ["EZ Bar 21s","Barbell 21s","Hammer Curl","Concentration Curl","Chest-Supported DB Row","Pause DB Row",
+  "Resistance Band Row","Band Lat Pulldown","Negative Chin-Up","Prone Reverse Fly","Wall Slide","Tempo DB Bench","Deficit Push-Up",
+  "Banded Tricep Pushdown","Lean-Away Lateral Raise","Step-Up","Hip Thrust","Band Leg Curl","Bird Dog","Suitcase Carry"];
+eq("every new exercise has full technique cues", NEW_SWAP_EX.filter(n => ["setup","movement","feel","mistake"].some(f => !T.TECHNIQUE[n]?.[f])), []);
+eq("every new exercise has a movers entry for volume credit", NEW_SWAP_EX.filter(n => !Object.keys(T.getMuscleWeeklySets([{ log: three(n) }])).length), []);
+eq("no group holds a banned lift", groupNames.filter(n => ["Barbell Row","Barbell Bent-Over Row","Barbell Good Morning","Overhead Press","Dumbbell Shoulder Press","EZ Bar Upright Row","Ab Wheel Rollout","Barbell Deadlift"].includes(n)), []);
+const FULL_EQ = [...DATA.equipment, "abwheel"];
+const spineOffered = groupNames.flatMap(n => T.swapOptions(n, FULL_EQ, "Full Body B").map(e => e.name)).filter(T.isLoadedSpine);
+eq("no group swap offers a loaded-spine lift", [...new Set(spineOffered)], []);
+const everySlot = ["Full Body A","Full Body B","Full Body C"].flatMap(d => fb(d).map(e => [d, e.name, T.swapOptions(e.name, FULL_EQ, d).length]));
+eq("every slot in A/B/C has at least one swap", everySlot.filter(([, , n]) => !n), []);
+ok("swaps are limited to the equipment on hand", T.swapOptions("Face Pull", ["bodyweight"], "Full Body A").every(e => e.eq.includes("bodyweight")));
+eq("the day's template alternatives come first", T.swapOptions("Romanian Deadlift", FULL_EQ, "Full Body C").slice(0,2).map(e => e.name), ["Single-Leg RDL","Barbell Deadlift"]);
+eq("every band lift logs without a load type", T.BAND_EX.filter(n => T.loadTypeOf(n) !== "bw"), []);
+eq("new exercises map to their muscle", [T.EXERCISE_TO_MUSCLE_GROUP["Chest-Supported DB Row"], T.EXERCISE_TO_MUSCLE_GROUP["Hip Thrust"], T.EXERCISE_TO_MUSCLE_GROUP["Wall Slide"]], ["back","glutes","lowerTraps"]);
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log("\n" + "═".repeat(60));

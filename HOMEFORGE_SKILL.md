@@ -116,21 +116,26 @@ exist and are reachable via `SPLITS[5]`, but are no longer the 3-day default.
 
 Revised Oct 2026 after a 30-day review (Sep 9 – Oct 7, 11 Full Body sessions):
 
+Revised again Nov 2026 after a review of the 7 sessions since Oct 11:
+
 | Slot | A — squat | B — unilateral | C — hinge |
 |---|---|---|---|
-| Primer (first, RIR 3+) | Dead Bug | Side Plank | — |
+| Primer 1 (no load) | Thoracic Extension | Thoracic Extension | Thoracic Extension |
+| Primer 2 (RIR 3+) | Dead Bug | Side Plank | — |
 | Lower | Barbell Squat | Bulgarian Split Squat | **Romanian Deadlift** |
-| Superset 1 (pull first) | SA DB Row ⇄ Bench Press | Inverted Row ⇄ Weighted Dip | Assisted Pull-Up ⇄ DB Bench Press |
-| Superset 2 | Lateral Raise ⇄ Face Pull | Chin-Up ⇄ Lateral Raise | DB Row ⇄ Face Pull |
-| Superset 3 | — | Face Pull ⇄ Prone Y-Raise | Lateral Raise ⇄ Prone Y-Raise |
-| Finisher | Sliding Leg Curl | Single-Leg Calf Raise | EZ Bar Curl |
+| Superset 1 (pull first, 4 row / 3 press) | SA DB Row ⇄ Bench Press | Inverted Row ⇄ Weighted Dip | Assisted Pull-Up ⇄ DB Bench Press (3) |
+| Superset 2 | Face Pull ⇄ Prone Y-Raise | Chin-Up ⇄ Face Pull | DB Row (4) ⇄ Face Pull |
+| Superset 3 | Lateral Raise (straight sets) | Prone Y-Raise ⇄ Lateral Raise | Prone Y-Raise ⇄ Lateral Raise |
+| Finisher | Sliding Leg Curl | Single-Leg Calf Raise | EZ Bar 21s |
 
-Template fields: `primer:true` (trunk bracing before the main lift) and
-`pair:n` (superset partners; `WorkoutScreen` names the partner on each card).
+Template fields: `primer:true` (work before the main lift), `pair:n` (superset
+partners; `WorkoutScreen` names the partner on each card) and `sets:n` (overrides
+the goal's set count for that slot).
 
 **Rules that hold across all three templates. Preserve them when editing:**
 1. **Horizontal pull ≥ horizontal push in every session.** One press, one row.
-2. **Face Pull in every session.** Rear delt work was 1.1 sets/week.
+2. **Face Pull and Prone Y-Raise in every session, ahead of the lateral raise.**
+   Rear delt work was 1.1 sets/week; lower traps were missing from A.
 3. **The loaded hinge appears in C only.** B carries no axial load and separates
    A's squat from C's hinge. **Do not move the hinge.**
 4. **Pull before press inside every superset.** 4 of 11 sessions were cut short
@@ -140,6 +145,9 @@ Template fields: `primer:true` (trunk bracing before the main lift) and
    covers side delts; B's vertical slot is a Chin-Up (vertical push:pull was 20:9).
 6. **Core work is a primer, never a finisher.** Ab wheel last ran to RIR 1 with
    reps falling 8 → 6 — where a tired rollout tips into lumbar extension.
+7. **Thoracic Extension opens every session.** Primers are the slot that never gets
+   cut: 4 of 4 done, against 1 of 4 for the last exercises in A and B. It earns no
+   working-set credit and no pre-fatigue (`MOVERS` entry with empty lists).
 
 ### Which session is next — `pickNextDay()`
 "Last + 1" broke twice in the 30-day log: A was repeated after a cut session so
@@ -187,6 +195,51 @@ were the 4th set.
 - After session save → stores `data.nextSession[bucket]` with per-exercise targets
 - Priority 0 in `getSmartSuggestion` — RIR plan overrides log/baseline
 - `📋 RIR-planned` badge + `planRIR` display in TODAY'S TARGET
+- **The plan has to reach the card.** The Nov 2026 review found almost none did:
+  - With a day known, only that day's bucket is read. Scanning every bucket let
+    plans frozen since Sep 12 override the live ones (bench asked for 74kg against
+    real work at 64kg). The old buckets stay stored for PPL; they are just not read
+    on a Full Body day.
+  - `mergeSessionPlan` updates only the lifts logged. A/B/C share the `fullbody`
+    bucket, and replacing it let B erase A's squat plan. A deload changes nothing.
+  - `rebuildPlans` replays the log once on load (`_plansRebuiltV1`) and after a
+    Sheets restore, to refill erased plans. Stored plans win, so applied AI proposals
+    survive. It passes no prior plans, so old sessions cannot count as tempo work.
+  - The card shows the exact target ("84kg × 7 · RIR 3") and uses it as the rep
+    hint. 56% of sets had landed on the bottom of the range, the old hint.
+  - Sets with no reps were pre-filled, not lifted, and no longer count. A 74kg
+    pre-fill turned 54kg × 12 into a 79kg plan.
+- A plan now always exists for a logged lift, so the plan wins in every phase and
+  the intensification formula only runs for a lift with no plan yet.
+
+### Heaviest load — the ceiling ladder ✅
+At the top of the rack (24kg) or the belt (+20kg): reps to the top of the range,
+then tempo (`plan.tempo`: 3s down, 1s pause, reps back to the bottom), then at the
+top under tempo `plan.ceilingAlt` names a variation from `CEILING_NEXT`. RIR ≤ 1
+still backs the load off and clears the tempo. `TEMPO_EX` are already the slow rep.
+
+### Bands ✅
+`BAND_EX` lifts log reps + RIR and a level (`BAND_LEVELS`) stored as `band` on each
+set; they carry no weight, so volume is unchanged. The top of the range moves to the
+next band and back to the bottom of the range (`stepBand`, reversed for
+`ASSISTED_EX`, where a heavier band helps more). Older sets have no level, so the
+card can only say heavier or lighter until one is picked.
+
+### 21s ✅
+`EZ Bar 21s` and `Barbell 21s` are separate from EZ Bar Curl. Range 14–21 (14 = two
+of the three 7-rep parts). Three sets of 21 at RIR ≥ 2 earns +5kg; never the big
+jump. `STARTING_LOADS` opens them at 18kg / 19kg. The Oct 25 and Nov 1 sessions stay
+logged under EZ Bar Curl; `getBestRecord` now uses one real set, so they do not skew it.
+
+### Swaps ✅
+`ALT_GROUPS` + `swapOptions(name, equipment, day)` drive both the card's Swap list
+and Home's Adjust panel, offline. The day's template alternatives come first. AI
+swaps run only on request, are told the conditions, and their results are filtered.
+
+### Posture check ✅
+Monthly prompt on Home: wall to back of head in cm, stored newest first in
+`data.postureChecks`, synced as the `posture` config key, and passed to the coach.
+It is the only direct measure of the kyphosis itself.
 
 ### Double progression ✅
 Replaced a flat `repMidpoint = 10` gate that applied to every exercise. Because
@@ -268,7 +321,11 @@ layoff.
 
 ### Google Sheets sync ✅
 - `sheetsPost()` uses GET with encoded payload (avoids CORS)
-- Auto-sync after every session save (background, non-blocking)
+- Auto-sync after every session and stretch save (background, non-blocking)
+- The script keeps a fixed set of columns and drops unknown fields, so `mode`,
+  `phase`, `focus` and `duration` travel inside the row's `nextSession` JSON as
+  `_meta`, and restore reads them back. The row carries only its own day's bucket,
+  because the payload goes in a GET URL (about 4.9kB, down from 8kB).
 - ☁️↑ bulk upload (clears then re-uploads), ☁️↓ restore with confirmation
 - `dedupHistory()` collapses duplicates on read, keyed on `date|day|mode`
 - `normDate()` handles Sheets Date objects (timezone-safe, uses local date)
@@ -296,7 +353,7 @@ layoff.
 ## Validator status (current build)
 ```
 validate.js          ✅ 101   ⚠️ 9 warnings   ❌ 2 errors
-validate-modes.mjs   ✅ 152   ❌ 0 failures
+validate-modes.mjs   ✅ 212   ❌ 0 failures
 validate-stretch.mjs ✅ 37    ❌ 0 failures
 ```
 The 2 errors and 9 warnings are pre-existing and non-critical: CORS/sandbox
@@ -316,18 +373,10 @@ and the baseline agree — the check itself is wrong).
 - **AI model**: `api/claude.js` uses `claude-haiku-4-5-20251001`. The analysis is
   now reasoning-heavy (ranking competing constraints); Sonnet would do it better
   at higher cost.
-- **`getBestRecord` mixes sets**: it takes the heaviest weight and the most reps
-  independently, so 89kg×8 plus an old 69kg×12 reads as 89kg×12 and the
-  log-based estimate overshoots (EZ Bar Curl suggested 28kg after 23kg×8–12).
-  Loaded-spine lifts are capped at the last weight lifted; everything else still
-  overshoots when no RIR plan exists. Fix: best set by estimated 1RM.
-- **Implement ceilings**: 5 lifts sit at the top of the rack — BSS, DB Bench,
-  DB Row, SA Row at 24kg dumbbells, Weighted Dip at the 20kg belt max. They need
-  a progression by tempo, pauses or harder variations, not load.
-- **Face Pull band tension is not logged** — 12 reps at RIR 2–3 in all 11
-  sessions of the 30-day review, so progression is invisible.
-- **Intensification for non-spine lifts** is sized at the 6-rep max for 6–8
-  reps, i.e. at failure — out of line with `TARGET_RIR = 2`.
+- **Intensification** no longer sets loads once a lift has a plan, which is now
+  nearly always, so the phase is mostly a label between deloads. Its formula (the
+  6-rep max for 6–8 reps, i.e. at failure on non-spine lifts) is out of line with
+  `TARGET_RIR = 2`, so decide whether to redesign the phase or remove it.
 - Overload display in ExerciseCard: within-cycle + cycle-to-cycle (designed, not built)
 - Mesocycle data synced to Sheets (currently only sessions + config)
 - PWA manifest for better phone install experience
@@ -339,9 +388,12 @@ The live log is in Google Sheets, read through the Apps Script (read-only):
 
 ```
 GET <Google Sheets URL above>?data={"action":"get_sessions"}   (URL-encode the JSON)
-→ { ok, sessions:[{ date, day, mode, volume, rating, notes, log:{ exercise:[{weight,reps,rpe}] }, … }] }
+→ { ok, sessions:[{ date, day, volume, rating, notes, log:{ exercise:[{weight,reps,rpe,band?}] }, nextSession:{ <bucket>, _meta:{ mode, phase, focus, duration } }, … }] }
 ```
 - `rpe` holds **RIR**, not RPE. Blank `weight` = bodyweight or band.
+- `mode` and `phase` are in `nextSession._meta`, on rows saved since Nov 2026. Older
+  rows have neither and carry every bucket, including the frozen PPL ones.
+- Stretch sessions appear as `day: "Stretch"` rows from Nov 2026.
 - Dates come back in two forms: ISO `2026-09-12` and `"Sat Sep 12"` with no
   year — parse the latter with the current year in **local** time
   (`toISOString` shifts it a day in CEST).
@@ -371,6 +423,10 @@ Playwright from the scratchpad with the already-downloaded browser:
   the page, write it into `localStorage.homeforge_data`, reload.
   **Delete the seed file afterwards.**
 - 390×844 viewport matches the phone.
+- **A saved session syncs to the live sheet.** Before logging one, block it:
+  `context.route(/script\.google\.com/, r => r.fulfill({ status:200, body:'{"ok":true}' }))`.
+  The blocked URL also shows the exact payload. Seeding through `addInitScript`
+  needs no seed file.
 
 ---
 
