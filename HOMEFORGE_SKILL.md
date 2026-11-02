@@ -236,6 +236,33 @@ logged under EZ Bar Curl; `getBestRecord` now uses one real set, so they do not 
 and Home's Adjust panel, offline. The day's template alternatives come first. AI
 swaps run only on request, are told the conditions, and their results are filtered.
 
+### Finish by 21:30 ✅
+The athlete's rule: a session ends by `LATEST_FINISH` ("21:30"). The app only offers;
+nothing is cut without a tap. Template rows carry `short` and `min`: the sets kept in
+that version, 0 = dropped.
+- Home compares the time left with each version. Too late for the minimum, it says
+  to stretch and the day stays next in the rotation.
+- During the workout, when the work left passes the time left, it offers the next
+  version. A lift already started stays (`keep`), and logged sets are never removed.
+- **Preserve when editing `short`/`min`:** Thoracic Extension, Face Pull and Y-Raise
+  stay in every version, pull sets ≥ press sets, finishers and the lateral raise go
+  first. Spine lifts lose sets, never rest, load or RIR.
+- A cut session (`entry.trim`) stays out of the volume trend and the volume deload
+  trigger, the coach is told about it, and `holdSpineLoad` keeps a spine lift's weight
+  when fewer than 3 sets were lifted.
+- `estimateMinutes` is a model until 3 timed sessions exist, then `sessionPace` (median
+  minutes per set of the last 5) replaces it. Duration runs from the first entry, so
+  it leaves out what comes before the first logged set.
+
+### Session in progress ✅
+Sets used to live only in `WorkoutScreen` state, so a tab change, reload or the phone
+unloading the page erased them. Every entry now goes to `homeforge_session_draft`
+(log, swaps, per-exercise times, rating, notes), separate from `STORAGE_KEY`, so a
+Sheets restore cannot touch it. Each card shows "✓ saved 20:41 · 2/4 sets". A draft
+with a lifted set holds the workout screen and replaces Start on Home with Continue /
+Discard. It saves under its own date and is cleared on Finish. It is local only: a
+Sheets row is written on Finish, because a mid-session row would replay as a session.
+
 ### Posture check ✅
 Monthly prompt on Home: wall to back of head in cm, stored newest first in
 `data.postureChecks`, synced as the `posture` config key, and passed to the coach.
@@ -353,7 +380,7 @@ layoff.
 ## Validator status (current build)
 ```
 validate.js          ✅ 101   ⚠️ 9 warnings   ❌ 2 errors
-validate-modes.mjs   ✅ 212   ❌ 0 failures
+validate-modes.mjs   ✅ 280   ❌ 0 failures
 validate-stretch.mjs ✅ 37    ❌ 0 failures
 ```
 The 2 errors and 9 warnings are pre-existing and non-critical: CORS/sandbox
@@ -394,6 +421,8 @@ GET <Google Sheets URL above>?data={"action":"get_sessions"}   (URL-encode the J
 - `mode` and `phase` are in `nextSession._meta`, on rows saved since Nov 2026. Older
   rows have neither and carry every bucket, including the frozen PPL ones.
 - Stretch sessions appear as `day: "Stretch"` rows from Nov 2026.
+- From Nov 2026 `_meta` also has `duration` (minutes), `start`, `trim` ("short"/"min") and
+  `times` (last entry per exercise), the first real timing in the log.
 - Dates come back in two forms: ISO `2026-09-12` and `"Sat Sep 12"` with no
   year — parse the latter with the current year in **local** time
   (`toISOString` shifts it a day in CEST).

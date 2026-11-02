@@ -39,6 +39,8 @@ export const __t = {
   pickNextDay, spineSwapsFor, getMuscleWeeklySets, isLoadedSpine, MRV_TARGETS,
   SPINE_TARGET_RIR, HORIZ_PUSH, HORIZ_PULL,
   mergeSessionPlan, rebuildPlans, swapOptions, ALT_GROUPS, BAND_EX, stepBand,
+  holdSpineLoad, setsFor, fitSets, trimForTime, estimateMinutes, suggestTier, minutesUntilFinish,
+  sessionPace, nextTier, draftIsOpen, detectTrends, LATEST_FINISH, REP_RANGES,
 };
 `;
 
@@ -579,6 +581,66 @@ ok("swaps are limited to the equipment on hand", T.swapOptions("Face Pull", ["bo
 eq("the day's template alternatives come first", T.swapOptions("Romanian Deadlift", FULL_EQ, "Full Body C").slice(0,2).map(e => e.name), ["Single-Leg RDL","Barbell Deadlift"]);
 eq("every band lift logs without a load type", T.BAND_EX.filter(n => T.loadTypeOf(n) !== "bw"), []);
 eq("new exercises map to their muscle", [T.EXERCISE_TO_MUSCLE_GROUP["Chest-Supported DB Row"], T.EXERCISE_TO_MUSCLE_GROUP["Hip Thrust"], T.EXERCISE_TO_MUSCLE_GROUP["Wall Slide"]], ["back","glutes","lowerTraps"]);
+
+// ── Finish by 21:30 ───────────────────────────────────────────────────────────
+console.log("\nTest 30: Short versions keep the posture and disc rules");
+const RR = T.REP_RANGES.hypertrophy;
+const tierDay = (d, tier) => T.trimForTime(T.getExercisesForDay(d, FULL_EQ, "hypertrophy", {}, "Intermediate", "weights"), tier);
+const setCount = (list, names) => list.filter(e => names.includes(e.name)).reduce((a, e) => a + T.setsFor(e, RR, false), 0);
+for (const d of ["Full Body A","Full Body B","Full Body C"]) for (const tier of ["short","min"]) {
+  const list = tierDay(d, tier), names = list.map(e => e.name), label = d.slice(-1) + " " + tier;
+  ok(label + " keeps Thoracic Extension, Face Pull and Y-Raise", ["Thoracic Extension","Face Pull","Prone Y-Raise"].every(n => names.includes(n)));
+  ok(label + " drops the lateral raise", !names.includes("Lateral Raise"));
+  ok(label + " pulls at least as much as it presses", setCount(list, T.HORIZ_PULL) >= setCount(list, T.HORIZ_PUSH));
+  eq(label + " has no half-empty pair beyond one straight set", list.filter(e => e.pair && !list.some(o => o !== e && o.pair === e.pair)).length <= 1, true);
+  ok(label + " loaded-spine lift stays within its cap", list.filter(e => T.isLoadedSpine(e.name)).every(e => T.setsFor(e, RR, false) <= 3));
+  ok(label + " keeps its main lift", list.some(e => ["Barbell Squat","Bulgarian Split Squat","Romanian Deadlift"].includes(e.name)));
+}
+eq("the minimum squat is 2 sets", T.setsFor(tierDay("Full Body A","min").find(e => e.name === "Barbell Squat"), RR, false), 2);
+eq("a deload never goes below 2 sets", T.setsFor(tierDay("Full Body A","min").find(e => e.name === "Barbell Squat"), RR, true), 2);
+const fullA = T.getExercisesForDay("Full Body A", FULL_EQ, "hypertrophy", {}, "Intermediate", "weights");
+eq("a lift already started is not dropped", T.trimForTime(fullA, "short", ["Lateral Raise"]).some(e => e.name === "Lateral Raise"), true);
+ok("the full day is the same list with no tier", T.trimForTime(fullA, null) === fullA);
+
+console.log("\nTest 31: Time estimates");
+for (const d of ["Full Body A","Full Body B","Full Body C"]) {
+  const m = [null,"short","min"].map(t => T.estimateMinutes(tierDay(d, t), "hypertrophy", false));
+  console.log("   " + d + " full/short/min: " + m.join(" / ") + " min");
+  ok(d + " full > short > minimum", m[0] > m[1] && m[1] > m[2]);
+  ok(d + " full takes 50-80 min", m[0] >= 50 && m[0] <= 80);
+}
+const noLog = T.estimateMinutes(fullA, "hypertrophy", false);
+const someLog = T.estimateMinutes(fullA, "hypertrophy", false, { "Barbell Squat":[{weight:"84",reps:"7"},{weight:"84",reps:"7"},{weight:"84",reps:"7"}] });
+ok("logged sets reduce the time left", someLog < noLog - 8);
+eq("a swapped lift counts as done under its new name", T.estimateMinutes(fullA, "hypertrophy", false, { "Goblet Squat":[{reps:"8"},{reps:"8"},{reps:"8"}] }, { "Barbell Squat":{ name:"Goblet Squat" } }) < noLog, true);
+const timed = (duration, sets) => ({ date:"2026-11-01", day:"Full Body A", mode:"weights", duration, log:{ "Barbell Squat":Array(sets).fill({reps:"7"}) } });
+eq("2 timed sessions are not enough for a pace", T.sessionPace([timed(60,20),timed(60,20)]), null);
+eq("the pace is the median minutes per set", T.sessionPace([timed(60,20),timed(40,20),timed(80,20)]), 3);
+eq("the real pace replaces the model", T.estimateMinutes(fullA.slice(0,1), "hypertrophy", false, {}, {}, 3), 9);
+eq("20:00 leaves 90 minutes", T.minutesUntilFinish(new Date(2026,10,2,20,0)), 90);
+eq("22:00 is past it", T.minutesUntilFinish(new Date(2026,10,2,22,0)), -30);
+eq("tier advice at each time", [T.suggestTier(70,65,45,35), T.suggestTier(50,65,45,35), T.suggestTier(40,65,45,35), T.suggestTier(20,65,45,35), T.suggestTier(-5,65,45,35)], [null,"short","min","stretch","stretch"]);
+eq("the deadline is 21:30", T.LATEST_FINISH, "21:30");
+
+console.log("\nTest 32: Saved sets and cut sessions");
+const blank = () => ({ reps:"" });
+eq("empty sets go when the target drops", T.fitSets([{reps:"8"},{reps:""},{reps:""},{reps:""}], 3, blank).length, 3);
+eq("lifted sets are never removed", T.fitSets([{reps:"8"},{reps:"8"},{reps:"8"},{reps:"8"}], 2, blank).length, 4);
+eq("undoing a cut brings the sets back", T.fitSets([{reps:"8"}], 3, blank).length, 3);
+eq("no entries yet gives blank sets", T.fitSets([], 3, blank).length, 3);
+ok("a draft with a lifted set is open", T.draftIsOpen({ log:{ Squat:[{weight:"84",reps:"7"}] } }));
+ok("a pre-filled weight alone is not", !T.draftIsOpen({ log:{ Squat:[{weight:"84",reps:""}] } }));
+ok("no draft is not open", !T.draftIsOpen(null));
+const vol = (v, trim) => ({ date:"2026-10-01", day:"Full Body A", mode:"weights", volume:v, ...(trim ? { trim } : {}), log:{ "Barbell Bench Press":[{weight:String(v),reps:"10",rpe:"2"}] } });
+eq("a cut session does not count as a falling trend", T.detectTrends("Full Body A", [vol(30,"short"),vol(50),vol(70),vol(60)], 83).some(t => t.type === "volume"), false);
+eq("real falling volume still counts", T.detectTrends("Full Body A", [vol(40),vol(50),vol(60),vol(70)], 83).some(t => t.type === "volume"), true);
+eq("a cut session does not trigger a deload", T.shouldDeload([vol(30,"short"),vol(50),vol(60),vol(70)]), false);
+
+const twoSets = { "Barbell Squat":[{weight:"84",reps:"10",rpe:"3"},{weight:"84",reps:"10",rpe:"3"}] };
+const risen = { "Barbell Squat":{ targetWeight:89, targetReps:6, targetRIR:3 } };
+eq("a cut session holds the load on a spine lift", [T.holdSpineLoad(risen, twoSets)["Barbell Squat"].targetWeight, T.holdSpineLoad(risen, twoSets)["Barbell Squat"].targetReps], [84, 10]);
+eq("all 3 sets still earn the increase", T.holdSpineLoad(risen, { "Barbell Squat":[...twoSets["Barbell Squat"], {weight:"84",reps:"10",rpe:"3"}] })["Barbell Squat"].targetWeight, 89);
+eq("other lifts are not held", T.holdSpineLoad({ "Dumbbell Row":{ targetWeight:24 } }, { "Dumbbell Row":[{weight:"22",reps:"12"}] })["Dumbbell Row"].targetWeight, 24);
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log("\n" + "═".repeat(60));

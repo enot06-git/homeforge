@@ -158,6 +158,9 @@ const LOADED_SPINE = ["Barbell Squat","Barbell Deadlift","Romanian Deadlift","Ba
 const SPINE_TARGET_RIR = 3;
 const SPINE_MAX_SETS   = 3;
 const SPINE_REPS       = "6-10";
+// The athlete's rule: a session ends by this time, so Home and the workout offer a
+// shorter version rather than a session that runs late.
+const LATEST_FINISH    = "21:30";
 const isLoadedSpine = (exName) => LOADED_SPINE.includes(exName);
 const targetRIRFor  = (exName) => isLoadedSpine(exName) ? SPINE_TARGET_RIR : TARGET_RIR;
 
@@ -583,16 +586,19 @@ const DAY_TEMPLATES = {
   //     lateral raise: lower traps were 4.1 sets/wk and missing from A.
   //   - `sets`: 4 on the row, 3 on the press, so pulling leads in every session
   //     rather than tying at 1:1 (the log ran 20:23).
+  //   - `short` / `min`: sets kept in the short and minimum versions, 0 = dropped.
+  //     Dropped first: finishers and the lateral raise. Thoracic Extension, Face Pull
+  //     and Y-Raise stay, and the main lift loses sets, never rest or RIR.
   "Full Body A": [
     { name:"Thoracic Extension",     alts:["Wall Slide"],                               eq:["bench","bodyweight"], primer:true },
     { name:"Dead Bug",               alts:["Plank"],                                    eq:["bodyweight","mat"], primer:true },
-    { name:"Barbell Squat",          alts:["Goblet Squat","Squat"],                     eq:["barbell","squatstands"] },
-    { name:"Single-Arm Dumbbell Row",alts:["Dumbbell Row","Inverted Row"],              eq:["dumbbells","bench"], pair:1, sets:4 },
-    { name:"Barbell Bench Press",    alts:["Dumbbell Bench Press","Push-Up"],           eq:["barbell","bench"],   pair:1, sets:3 },
-    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"],             pair:2 },
-    { name:"Prone Y-Raise",          alts:["Band Pull-Apart"],                          eq:["dumbbells","bench"], pair:2 },
-    { name:"Lateral Raise",          alts:["Band Lateral Raise"],                       eq:["dumbbells"] },
-    { name:"Sliding Leg Curl",       alts:["Single-Leg Glute Bridge"],                  eq:["bodyweight","mat"] },
+    { name:"Barbell Squat",          alts:["Goblet Squat","Squat"],                     eq:["barbell","squatstands"], min:2 },
+    { name:"Single-Arm Dumbbell Row",alts:["Dumbbell Row","Inverted Row"],              eq:["dumbbells","bench"], pair:1, sets:4, short:3, min:3 },
+    { name:"Barbell Bench Press",    alts:["Dumbbell Bench Press","Push-Up"],           eq:["barbell","bench"],   pair:1, sets:3, min:2 },
+    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"],             pair:2, short:3, min:3 },
+    { name:"Prone Y-Raise",          alts:["Band Pull-Apart"],                          eq:["dumbbells","bench"], pair:2, short:3, min:3 },
+    { name:"Lateral Raise",          alts:["Band Lateral Raise"],                       eq:["dumbbells"], short:0, min:0 },
+    { name:"Sliding Leg Curl",       alts:["Single-Leg Glute Bridge"],                  eq:["bodyweight","mat"], short:0, min:0 },
   ],
   "Full Body B": [
     // Unilateral lower body, and deliberately the MIDDLE of the rotation: quad
@@ -602,30 +608,30 @@ const DAY_TEMPLATES = {
     // 9 times in the log.
     { name:"Thoracic Extension",     alts:["Wall Slide"],                               eq:["bench","bodyweight"], primer:true },
     { name:"Side Plank",             alts:["Pallof Press","Dead Bug"],                  eq:["bodyweight","mat"], primer:true },
-    { name:"Bulgarian Split Squat",  alts:["Lunge","Goblet Squat"],                     eq:["bodyweight","bench"] },
+    { name:"Bulgarian Split Squat",  alts:["Lunge","Goblet Squat"],                     eq:["bodyweight","bench"], short:3, min:2 },
     // Barbell Row is not an alternative here: a bent-over barbell row loads the
     // lumbar spine in flexion, and B exists to carry no axial load.
-    { name:"Inverted Row",           alts:["Dumbbell Row"],                             eq:["pullupbar","bodyweight"], pair:1, sets:4 },
-    { name:"Weighted Dip",           alts:["Close-Grip Bench Press","Tricep Dips"],     eq:["pullupbar","dipbelt"],    pair:1, sets:3 },
-    { name:"Chin-Up",                alts:["Assisted Pull-Up","Neutral Grip Pull-Up"],  eq:["pullupbar"],              pair:2 },
-    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"],                  pair:2 },
-    { name:"Prone Y-Raise",          alts:["Band Pull-Apart"],                          eq:["dumbbells","bench"],      pair:3 },
-    { name:"Lateral Raise",          alts:["Band Lateral Raise"],                       eq:["dumbbells"],              pair:3 },
-    { name:"Single-Leg Calf Raise",  alts:["Calf Raise"],                               eq:["dumbbells"] },
+    { name:"Inverted Row",           alts:["Dumbbell Row"],                             eq:["pullupbar","bodyweight"], pair:1, sets:4, short:3, min:3 },
+    { name:"Weighted Dip",           alts:["Close-Grip Bench Press","Tricep Dips"],     eq:["pullupbar","dipbelt"],    pair:1, sets:3, min:2 },
+    { name:"Chin-Up",                alts:["Assisted Pull-Up","Neutral Grip Pull-Up"],  eq:["pullupbar"],              pair:2, short:3, min:0 },
+    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"],                  pair:2, short:3, min:3 },
+    { name:"Prone Y-Raise",          alts:["Band Pull-Apart"],                          eq:["dumbbells","bench"],      pair:3, short:3, min:3 },
+    { name:"Lateral Raise",          alts:["Band Lateral Raise"],                       eq:["dumbbells"],              pair:3, short:0, min:0 },
+    { name:"Single-Leg Calf Raise",  alts:["Calf Raise"],                               eq:["dumbbells"], short:0, min:0 },
   ],
   "Full Body C": [
     // The only loaded hinge in the rotation. RDL rather than conventional
     // deadlift by default — same posterior chain, less spinal compression.
     // Straps: the pull-up follows, and grip spent on the RDL put it at RIR 1.
     { name:"Thoracic Extension",     alts:["Wall Slide"],                               eq:["bench","bodyweight"], primer:true },
-    { name:"Romanian Deadlift",      alts:["Single-Leg RDL","Barbell Deadlift"],        eq:["dumbbells","barbell"] },
-    { name:"Assisted Pull-Up",       alts:["Pull-Up","Inverted Row"],                   eq:["pullupbar"],         pair:1 },
-    { name:"Dumbbell Bench Press",   alts:["Barbell Bench Press","Push-Up"],            eq:["dumbbells","bench"], pair:1, sets:3 },
-    { name:"Dumbbell Row",           alts:["Single-Arm Dumbbell Row","Inverted Row"],   eq:["dumbbells"],         pair:2, sets:4 },
-    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"],             pair:2 },
-    { name:"Prone Y-Raise",          alts:["Band Pull-Apart"],                          eq:["dumbbells","bench"], pair:3 },
-    { name:"Lateral Raise",          alts:["Band Lateral Raise"],                       eq:["dumbbells"],         pair:3 },
-    { name:"EZ Bar 21s",             alts:["EZ Bar Curl","Barbell 21s","Dumbbell Curl"],eq:["ezbar"], sets:3 },
+    { name:"Romanian Deadlift",      alts:["Single-Leg RDL","Barbell Deadlift"],        eq:["dumbbells","barbell"], min:2 },
+    { name:"Assisted Pull-Up",       alts:["Pull-Up","Inverted Row"],                   eq:["pullupbar"],         pair:1, short:3, min:3 },
+    { name:"Dumbbell Bench Press",   alts:["Barbell Bench Press","Push-Up"],            eq:["dumbbells","bench"], pair:1, sets:3, min:2 },
+    { name:"Dumbbell Row",           alts:["Single-Arm Dumbbell Row","Inverted Row"],   eq:["dumbbells"],         pair:2, sets:4, short:3, min:0 },
+    { name:"Face Pull",              alts:["Band Pull-Apart"],                          eq:["bands"],             pair:2, short:3, min:3 },
+    { name:"Prone Y-Raise",          alts:["Band Pull-Apart"],                          eq:["dumbbells","bench"], pair:3, short:3, min:3 },
+    { name:"Lateral Raise",          alts:["Band Lateral Raise"],                       eq:["dumbbells"],         pair:3, short:0, min:0 },
+    { name:"EZ Bar 21s",             alts:["EZ Bar Curl","Barbell 21s","Dumbbell Curl"],eq:["ezbar"], sets:3, short:0, min:0 },
   ],
   "Upper A": [
     { name:"Barbell Bench Press",    alts:["Dumbbell Bench Press","Push-Up"],           eq:["barbell","bench"] },
@@ -1084,7 +1090,8 @@ function detectTrends(day, history, bodyWeight) {
   }
 
   // 2. Volume trend — 3 consecutive drops
-  const vols = sameDaySessions.map(h => sessionVolume(h, bodyWeight));
+  // A session cut for time is not a fatigue signal.
+  const vols = sameDaySessions.filter(h => !h.trim).map(h => sessionVolume(h, bodyWeight));
   if (vols.length >= 3 && vols[0] < vols[1] && vols[1] < vols[2])
     flags.push({ type:"volume", msg:`${day} volume has dropped 3 sessions in a row — check fatigue` });
 
@@ -1512,7 +1519,9 @@ function getExercisesForDay(day, equipment, goal, favourites, level, mode) {
           exercises.push({ ...dbEx, isFav: allFavs.includes(dbEx.name),
             ...(entry.pair   ? { pair: entry.pair } : {}),
             ...(entry.sets   ? { sets: entry.sets } : {}),
-            ...(entry.primer ? { primer: true }     : {}) });
+            ...(entry.primer ? { primer: true }     : {}),
+            ...(entry.short !== undefined ? { short: entry.short } : {}),
+            ...(entry.min   !== undefined ? { min: entry.min }     : {}) });
           break;
         }
       }
@@ -1543,6 +1552,114 @@ function getExercisesForDay(day, equipment, goal, favourites, level, mode) {
   });
   return exercises;
 }
+
+const isLifted = (set) => !!(set?.reps || set?.seconds);
+
+// Working sets one card asks for, shared by the card and the time estimate.
+function setsFor(ex, rr, isDeload) {
+  if (ex.timed || ex.repOverride) return 3;
+  const base = isLoadedSpine(ex.name) ? Math.min(ex.sets || rr.sets, SPINE_MAX_SETS) : (ex.sets || rr.sets);
+  return isDeload ? Math.max(2, Math.round(base * 2 / 3)) : base;
+}
+
+// The sets a card shows once its target count changed mid-session: work already
+// lifted always stays, and only empty sets go.
+function fitSets(logged, count, blank) {
+  const out = [...logged];
+  while (out.length > count && !isLifted(out[out.length - 1])) out.pop();
+  while (out.length < count) out.push(blank());
+  return out;
+}
+
+// tier: "short" | "min". `keep` names lifts already started, which stay on the list.
+function trimForTime(list, tier, keep = []) {
+  if (!tier) return list;
+  const out = list.flatMap(ex => {
+    const count = ex[tier];
+    if (count === undefined) return [ex];
+    if (count === 0) return keep.includes(ex.name) ? [ex] : [];
+    return [{ ...ex, sets: count }];
+  });
+  // Two halves left from different supersets pair up, which saves their rest.
+  const alone = out.filter(ex => ex.pair && !out.some(o => o !== ex && o.pair === ex.pair));
+  return out.map(ex => {
+    const at = alone.indexOf(ex);
+    return at % 2 === 1 ? { ...ex, pair: alone[at - 1].pair } : ex;
+  });
+}
+
+// Fewer sets than the cap are not enough evidence to load the spine more, so a cut
+// session holds the weight on a loaded-spine lift. Reps can still move.
+function holdSpineLoad(plan, log) {
+  const out = { ...plan };
+  Object.keys(out).filter(isLoadedSpine).forEach(name => {
+    const lifted = (log[name] || []).filter(isLifted);
+    if (!lifted.length || lifted.length >= SPINE_MAX_SETS) return;
+    const weight = Math.max(...lifted.map(set => parseFloat(set.weight) || 0));
+    if (out[name].targetWeight > weight) {
+      const reps = Math.round(lifted.reduce((a, set) => a + (parseInt(set.reps) || 0), 0) / lifted.length);
+      out[name] = { ...out[name], targetWeight: weight, targetReps: reps };
+    }
+  });
+  return out;
+}
+
+const nextTier = (tier) => (!tier ? "short" : tier === "short" ? "min" : null);
+const tierLabel = (tier) => (tier === "short" ? "Short" : tier === "min" ? "Minimum" : "Full");
+
+function minutesUntilFinish(now = new Date(), latest = LATEST_FINISH) {
+  const [h, m] = latest.split(":").map(Number);
+  return h * 60 + m - (now.getHours() * 60 + now.getMinutes());
+}
+
+// Real minutes per set from the last sessions. Needs 3 timed sessions to mean anything.
+function sessionPace(history) {
+  const paces = weightsHistory(history)
+    .filter(h => h.duration && h.day !== "Stretch")
+    .slice(0, 5)
+    .map(h => h.duration / Object.values(h.log || {}).flat().filter(isLifted).length)
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  return paces.length >= 3 ? paces[Math.floor(paces.length / 2)] : null;
+}
+
+// Minutes of work left. With no timed sessions yet this is a model: 45s a set (90s
+// for one side at a time or 21s), a superset shares its rest, and squat and RDL get
+// 3 minutes of rest and a warm-up. Once the log has times, the real pace replaces it.
+function estimateMinutes(list, goal, isDeload, log = {}, swaps = {}, pace = null) {
+  const rr = REP_RANGES[goal] || REP_RANGES.general;
+  let sec = 0, setsLeft = 0;
+  list.forEach(ex => {
+    const name = swaps[ex.name]?.name || ex.name;
+    const done = (log[name] || []).filter(isLifted).length;
+    const left = Math.max(0, setsFor(ex, rr, isDeload) - done);
+    if (!left) return;
+    setsLeft += left;
+    if (ex.primer) { sec += left * 60; return; }
+    const spine = isLoadedSpine(name);
+    const paired = list.some(o => o !== ex && o.pair && o.pair === ex.pair);
+    const rest = spine ? 180 : rr.restSec;
+    const work = ex.unilateral || name.endsWith("21s") ? 90 : 45;
+    sec += left * work + (paired ? left * rest / 2 : (left - 1) * rest) + 60 + (spine && !done ? 300 : 0);
+  });
+  return Math.ceil(pace ? setsLeft * pace : sec / 60);
+}
+
+function suggestTier(minutesLeft, full, short, min) {
+  if (minutesLeft >= full) return null;
+  if (minutesLeft >= short) return "short";
+  if (minutesLeft >= min) return "min";
+  return "stretch";
+}
+
+// The session in progress lives under its own key, so nothing typed is lost to a tab
+// change, a reload or the phone unloading the page. Saved on every entry.
+const DRAFT_KEY = "homeforge_session_draft";
+const loadDraft = () => { try { return JSON.parse(localStorage.getItem(DRAFT_KEY)) || null; } catch { return null; } };
+const saveDraft = (draft) => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {} };
+const clearDraft = () => { try { localStorage.removeItem(DRAFT_KEY); } catch {} };
+const draftIsOpen = (draft) => Object.values(draft?.log || {}).flat().some(isLifted);
+const clockNow = () => new Date().toTimeString().slice(0, 5);
 
 // Weight records come from weights-mode sessions only — a TRX or bodyweight
 // session must never establish or raise a loaded best.
@@ -1602,8 +1719,8 @@ function shouldDeload(history, bodyWeight) {
   // Volume-based, so only weights sessions count (TRX/BW log volume 0).
   const loaded = weightsHistory(history);
   if (loaded.length < 4) return false;
-  const v = loaded.slice(0, 4).map(h => sessionVolume(h, bodyWeight));
-  if (v[0] < v[1] && v[1] < v[2] && v[2] < v[3]) return true;
+  const v = loaded.filter(h => !h.trim).slice(0, 4).map(h => sessionVolume(h, bodyWeight));
+  if (v.length === 4 && v[0] < v[1] && v[1] < v[2] && v[2] < v[3]) return true;
   const weeks = (new Date() - new Date(loaded[loaded.length - 1]?.date)) / (7 * 86400000);
   return weeks >= 4 && loaded.length >= 12;
 }
@@ -1726,7 +1843,10 @@ async function syncSession(entry, nextSession, bodyWeightHistory) {
   const _meta = { mode: entry.mode || DEFAULT_MODE,
     ...(entry.phase    ? { phase: entry.phase }       : {}),
     ...(entry.focus    ? { focus: entry.focus }       : {}),
-    ...(entry.duration ? { duration: entry.duration } : {}) };
+    ...(entry.duration ? { duration: entry.duration } : {}),
+    ...(entry.start    ? { start: entry.start }       : {}),
+    ...(entry.trim     ? { trim: entry.trim }         : {}),
+    ...(entry.times    ? { times: entry.times }       : {}) };
   try {
     await sheetsPost({
       action: "save_session",
@@ -1842,7 +1962,10 @@ async function restoreFromSheets(setData, setSyncStatus) {
             return { ...s, date, mode: s.mode || meta.mode || localModes[`${date}|${s.day}`] || DEFAULT_MODE,
               ...(meta.phase    ? { phase: meta.phase }       : {}),
               ...(meta.focus    ? { focus: meta.focus }       : {}),
-              ...(meta.duration ? { duration: meta.duration } : {}) };
+              ...(meta.duration ? { duration: meta.duration } : {}),
+              ...(meta.start    ? { start: meta.start }       : {}),
+              ...(meta.trim     ? { trim: meta.trim }         : {}),
+              ...(meta.times    ? { times: meta.times }       : {}) };
           })
       );
       const merged   = [...cloud];
@@ -2265,17 +2388,19 @@ function ScheduleScreen({ data, setData, onNext }) {
 }
 
 // ── Exercise Card ─────────────────────────────────────────────────────────────
-function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLog, history, priorNames }) {
+function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLog, history, priorNames, swap, onSwap, savedAt, onLogged }) {
   const [expanded, setExpanded] = useState(false);
   const [showDesc, setShowDesc] = useState(false);
   const [tip, setTip] = useState("");
   const [loadingTip, setLoadingTip] = useState(false);
   const [alts, setAlts] = useState([]);
   const [loadingAlts, setLoadingAlts] = useState(false);
-  const [swappedTo, setSwappedTo] = useState(null);
+  const swappedTo = swap;
+  const setSwappedTo = onSwap;
   const [showSwaps, setShowSwaps] = useState(false);
 
-  const activeEx = swappedTo || ex;
+  // A saved swap follows the slot's current role, which a time cut can change.
+  const activeEx = swappedTo ? { ...swappedTo, pair:ex.pair, pairWith:ex.pairWith, ...(ex.sets ? { sets:ex.sets } : {}) } : ex;
   const isTimed = !!activeEx.timed;
   const timedSec = activeEx.timedSec || 60;
   const repOverride = activeEx.repOverride || null;
@@ -2300,9 +2425,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   // Two-thirds of the working sets, not half: enough to hold the movement
   // pattern without adding fatigue.
   const spine = isLoadedSpine(key);
-  const baseSets = spine ? Math.min(rr.sets, SPINE_MAX_SETS) : (activeEx.sets || rr.sets);
-  const numSets = (isTimed || repOverride) ? effectiveSets
-    : _isDeload ? Math.max(2, Math.round(baseSets * 2 / 3)) : baseSets;
+  const numSets = setsFor(activeEx, rr, _isDeload);
   const suggestion = useMemo(
     () => getSmartSuggestion(key, goal, history, data.profileBaseline, data, priorNames),
     [key, goal, history, data.profileBaseline, data.nextSession, data.activeMode, data.barWeight, data.barbellPlates, data.ezbarWeight, data.ezbarPlates, data.dumbbellMax, data.dumbbellWeights, data.dipbeltMax, priorNames]
@@ -2322,8 +2445,10 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const prevSets = prevSession?.log?.[key] || [];
   const isBand = isBandEx(key);
   const defaultBand = isBand ? (suggestion?.band || prevSets.find(s => s.band)?.band || "") : "";
-  const sets = sessionLog[key] || Array.from({ length: numSets }, () => isTimed ? { seconds: "", rpe: "" }
-    : { weight: suggestion?.weight || "", reps: "", rpe: "", ...(defaultBand ? { band: defaultBand } : {}) });
+  const blankSet = () => isTimed ? { seconds: "", rpe: "" }
+    : { weight: suggestion?.weight || "", reps: "", rpe: "", ...(defaultBand ? { band: defaultBand } : {}) };
+  const sets = fitSets(sessionLog[key] || [], numSets, blankSet);
+  const setsLifted = sets.filter(isLifted).length;
   const bandLevel = isBand ? (sets.find(s => s.band)?.band || "") : "";
   const weightDisplay = suggestion?.weight ? formatWeightDisplay(key, suggestion.weight, data) : null;
   // Best historical 1RM for live PR detection
@@ -2335,6 +2460,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const updateSet = (i, field, val) => {
     const next = sets.map((s, idx) => idx === i ? { ...s, [field]: val } : s);
     setSessionLog(l => ({ ...l, [key]: next }));
+    if (val !== "") onLogged(key);
   };
   const setBand = (band) => setSessionLog(l => ({ ...l, [key]: sets.map(s => ({ ...s, band })) }));
 
@@ -2495,6 +2621,11 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
               {spine && <span style={S.tag("var(--red)")}>lower back · RIR {SPINE_TARGET_RIR}</span>}
             </div>
             <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", marginTop:2 }}>{activeEx.muscle}</div>
+            {setsLifted > 0 && (
+              <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--green)", marginTop:2 }}>
+                ✓ saved{savedAt ? ` ${savedAt}` : ""} · {setsLifted}/{numSets} sets
+              </div>
+            )}
             {activeEx.primer && (
               <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--blue)", marginTop:2 }}>
                 {activeEx.repsOnly ? "warm-up · open the upper back before you load it"
@@ -3342,36 +3473,53 @@ function StretchSession({ data, setData, onBack }) {
 
 // ── Workout Screen ────────────────────────────────────────────────────────────
 function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () => {} }) {
-  const day = data.activeDay || (data.split||[])[0] || "Full Body";
+  // A session with sets lifted holds the screen until it is finished or discarded.
+  const [draft] = useState(loadDraft);
+  const pinned = data.activeDay !== "Stretch" && draftIsOpen(draft);
+  const day = pinned ? draft.day : (data.activeDay || (data.split||[])[0] || "Full Body");
   const meso      = initMesocycle(data.mesocycle);
   const isDeload   = meso.phase === "deload";
   const isIntense  = meso.phase === "intensification";
   const phaseLen   = PHASE_LENGTHS[meso.phase] || 5;
 
-  const mode      = data.activeMode || DEFAULT_MODE;
+  const mode      = pinned ? draft.mode : (data.activeMode || DEFAULT_MODE);
   const isWeights = isWeightsMode(mode);
+  const resumed   = draft && draft.day === day && draft.mode === mode ? draft : null;
 
-  const exercises = useMemo(() => {
+  // Plan lookups on the cards read activeDay, so it has to match the resumed session.
+  useEffect(() => {
+    if (pinned && (data.activeDay !== draft.day || data.activeMode !== draft.mode))
+      setData(d => ({ ...d, activeDay: draft.day, activeMode: draft.mode }));
+  }, []);
+
+  const baseExercises = useMemo(() => {
     const raw = getExercisesForDay(day, data.equipment||[], data.goal, data.favourites, data.level, mode);
     const ov = (data.sessionOverride?.day === day) ? data.sessionOverride : { removed: [], replaced: {} };
     const pool = isWeights
       ? Object.values(EXERCISE_DB).flat()
       : Object.values(MODE_EXERCISE_DB[mode] || {}).flat();
-    const list = raw
+    return raw
       .filter(ex => !ov.removed.includes(ex.name))
       .map(ex => {
         const rep = ov.replaced[ex.name];
         if (!rep) return ex;
         const dbEx = pool.find(e => e.name === rep);
         // A swap keeps its slot's role: still paired, still a primer.
-        return dbEx ? { ...dbEx, isFav: false, pair: ex.pair, primer: ex.primer, sets: ex.sets } : ex;
+        return dbEx ? { ...dbEx, isFav: false, pair: ex.pair, primer: ex.primer, sets: ex.sets, short: ex.short, min: ex.min } : ex;
       });
+  }, [day, mode, isWeights, data.equipment, data.goal, data.favourites, data.level, data.sessionOverride]);
+
+  const activeTier = data.sessionOverride?.day === day ? (data.sessionOverride.tier || null) : null;
+  const tierKeep   = data.sessionOverride?.day === day ? data.sessionOverride.keep : undefined;
+
+  const exercises = useMemo(() => {
+    const list = trimForTime(baseExercises, activeTier, tierKeep);
     // Name each superset partner. A pair with one half removed is a straight set.
     return list.map(ex => {
       const mate = ex.pair && list.find(o => o !== ex && o.pair === ex.pair);
       return mate ? { ...ex, pairWith: mate.name } : ex;
     });
-  }, [day, mode, isWeights, data.equipment, data.goal, data.favourites, data.level, data.sessionOverride]);
+  }, [baseExercises, activeTier, tierKeep]);
 
   // What each card follows in today's order — drives the pre-fatigue correction.
   // Memoised so the cards' suggestion memo is not invalidated on every render.
@@ -3384,7 +3532,11 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
   // progression stay inside the mode, and loaded bests stay out of TRX/BW.
   const modeHistory = useMemo(() => historyForMode(data.history, mode), [data.history, mode]);
 
-  const [sessionLog, setSessionLog] = useState({});
+  const [sessionLog, setSessionLog] = useState(() => resumed?.log || {});
+  const [swaps, setSwaps] = useState(() => resumed?.swaps || {});
+  const [times, setTimes] = useState(() => resumed?.times || {});
+  const [startedAt, setStartedAt] = useState(() => resumed?.startedAt || null);
+  const [sessionDate] = useState(() => resumed?.date || new Date().toISOString().slice(0,10));
   const [finished, setFinished] = useState(false);
   const [trendDismissed, setTrendDismissed] = useState(false);
   const [stretchSkipped, setStretchSkipped] = useState(false);
@@ -3392,9 +3544,21 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
     () => (trendDismissed || !isWeights) ? [] : detectTrends(day, data.history || [], data.weight),
     [trendDismissed, isWeights, day, data.history]
   );
-  const [sessionRating, setSessionRating] = useState("");
-  const [sessionNotes, setSessionNotes] = useState("");
+  const [sessionRating, setSessionRating] = useState(() => resumed?.rating || "");
+  const [sessionNotes, setSessionNotes] = useState(() => resumed?.notes || "");
   const [planSaved, setPlanSaved] = useState(false);
+
+  // Every entry goes straight to storage, one exercise at a time.
+  const onLogged = (name) => {
+    setTimes(t => ({ ...t, [name]: clockNow() }));
+    setStartedAt(at => at || new Date().toISOString());
+  };
+  useEffect(() => {
+    if (planSaved || day === "Stretch") return;
+    if (Object.keys(sessionLog).length || Object.keys(swaps).length || sessionRating || sessionNotes)
+      saveDraft({ day, mode, date: sessionDate, startedAt, log: sessionLog, swaps, times, rating: sessionRating, notes: sessionNotes });
+    else clearDraft();
+  }, [sessionLog, swaps, times, startedAt, sessionRating, sessionNotes, planSaved, day, mode, sessionDate]);
   const [aiSummary, setAiSummary] = useState(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [appliedProposals, setAppliedProposals] = useState(() => new Set());
@@ -3442,12 +3606,17 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
     // `mode` is the marker that keeps TRX/BW sessions out of weight progression.
     // phase is persisted so "when was the last deload" is answerable from the
     // log itself rather than only from the live mesocycle counter.
-    const entry = { date: new Date().toISOString().slice(0,10), day, mode, volume: totalVolume,
-      log: sessionLog, rating: sessionRating, notes: sessionNotes, phase: meso.phase };
+    // Over 4 hours means a session left open and resumed later, not its real length.
+    const minutes = startedAt ? Math.round((Date.now() - new Date(startedAt)) / 60000) : 0;
+    const entry = { date: sessionDate, day, mode, volume: totalVolume,
+      log: sessionLog, rating: sessionRating, notes: sessionNotes, phase: meso.phase,
+      ...(minutes > 0 && minutes <= 240 ? { duration: minutes, start: new Date(startedAt).toTimeString().slice(0,5) } : {}),
+      ...(activeTier ? { trim: activeTier } : {}),
+      ...(Object.keys(times).length ? { times } : {}) };
     const { dayType, plan } = calcNextSessionPlan(day, sessionLog, data.goal, data);
     // Non-weights plans go to their own namespace, so they only ever feed back
     // into the same mode. In TRX/BW every entry comes out as a rep target.
-    const updatedNextSession = mergeSessionPlan(data.nextSession, planKeyFor(dayType, mode), plan, isWeights ? meso.phase : null);
+    const updatedNextSession = mergeSessionPlan(data.nextSession, planKeyFor(dayType, mode), activeTier ? holdSpineLoad(plan, sessionLog) : plan, isWeights ? meso.phase : null);
     // Update mesocycle — the lifting block only advances on weights sessions.
     const currentMeso  = initMesocycle(data.mesocycle);
     const newCount     = isWeights ? currentMeso.sessionCount + 1 : currentMeso.sessionCount;
@@ -3462,6 +3631,7 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
     syncSession(entry, updatedNextSession, data.bodyWeightHistory || [])
       .then(() => setSyncStatus("ok"))
       .catch(() => setSyncStatus("error"));
+    clearDraft();
     setPlanSaved(true);
     setFinished(true);
 
@@ -3486,7 +3656,7 @@ Rules:
 - Loaded-spine lifts (${LOADED_SPINE.join(", ")}) are the exception, by the athlete's own choice for the lumbar disc: RIR ${SPINE_TARGET_RIR}, at most ${SPINE_MAX_SETS} working sets, ${SPINE_REPS} reps. Never suggest taking them closer to failure, adding a set, or a heavier top set. Any set on them below RIR ${SPINE_TARGET_RIR} means hold the load next time.
 - Never suggest adding overhead pressing; side delts are trained with lateral raises.
 - Cite real numbers from the data given. Never invent a number you were not shown.
-
+${entry.trim ? `- This session was deliberately shortened to finish by ${LATEST_FINISH}. Fewer sets or lifts today are not a drop in performance or adherence.\n` : ""}
 Respond in EXACTLY this format with these three section markers on their own lines. Do not add any text before [SESSION] or after the last proposal.
 
 [SESSION]
@@ -3676,6 +3846,32 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
         </div>
       )}
 
+      {isWeights && (() => {
+        const minutesLeft = minutesUntilFinish();
+        const pace = sessionPace(data.history);
+        const need = estimateMinutes(exercises, data.goal, isDeload, sessionLog, swaps, pace);
+        if (need <= minutesLeft) return null;
+        const started = baseExercises.filter(ex => (sessionLog[swaps[ex.name]?.name || ex.name] || []).some(isLifted)).map(ex => ex.name);
+        const tier = nextTier(activeTier);
+        const trimmed = tier ? trimForTime(baseExercises, tier, started) : null;
+        const saved = trimmed ? need - estimateMinutes(trimmed, data.goal, isDeload, sessionLog, swaps, pace) : 0;
+        const dropped = trimmed ? exercises.filter(ex => !trimmed.some(o => o.name === ex.name)).map(ex => ex.name) : [];
+        return (
+          <div style={{ ...S.warn, marginBottom:10 }}>
+            <div>
+              ⏰ {minutesLeft > 0 ? `${minutesLeft} min to ${LATEST_FINISH}` : `Past ${LATEST_FINISH}`}, about {need} min of work left.
+              {saved <= 0 && " Nothing left to cut: stop on time and save what you have logged."}
+            </div>
+            {saved > 0 && (
+              <button style={{ ...S.btnSm, marginTop:8, width:"100%", justifyContent:"center", minHeight:44 }}
+                onClick={() => setData(d => ({ ...d, sessionOverride: { removed:[], replaced:{}, ...(d.sessionOverride?.day === day ? d.sessionOverride : {}), day, tier, keep: started } }))}>
+                {tierLabel(tier)} version: {saved} min less{dropped.length ? `, drop ${dropped.join(", ")}` : ", fewer sets"}
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
       <div style={{ ...S.card, marginBottom:20, border:"1px solid rgba(59,130,246,0.3)" }}>
         <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:13, color:"var(--blue)", marginBottom:8 }}>
           WARM-UP {age>=40?"(40+ Extended)":""}
@@ -3688,7 +3884,9 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
       {exercises.length === 0 ? (
         <div style={{ ...S.card, textAlign:"center", padding:28, color:"var(--muted)" }}>No exercises match your equipment.</div>
       ) : exercises.map((ex,i) => (
-        <ExerciseCard key={`${mode}-${ex.name}-${i}`} ex={ex} exNum={i+1} totalEx={exercises.length} goal={data.goal} data={data} sessionLog={sessionLog} setSessionLog={setSessionLog} history={modeHistory} priorNames={priorByIndex[i]} />
+        <ExerciseCard key={`${mode}-${ex.name}-${i}`} ex={ex} exNum={i+1} totalEx={exercises.length} goal={data.goal} data={data} sessionLog={sessionLog} setSessionLog={setSessionLog} history={modeHistory} priorNames={priorByIndex[i]}
+          swap={swaps[ex.name] || null} onSwap={(to) => setSwaps(all => ({ ...all, [ex.name]: to }))}
+          savedAt={times[swaps[ex.name]?.name || ex.name]} onLogged={onLogged} />
       ))}
 
       <div style={{ ...S.card, marginTop:16 }}>
@@ -6109,6 +6307,8 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
 
   const [showAdjust, setShowAdjust] = useState(false);
   const [showAltsFor, setShowAltsFor] = useState(null); // exercise name
+  const [draft, setDraft] = useState(loadDraft);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   // Preview list with overrides applied (for the adjust panel)
   const todayExercises = getExercisesForDay(activeDay, data.equipment||[], data.goal, data.favourites, data.level, mode);
@@ -6452,9 +6652,58 @@ function HomeScreen({ data, setData, onStartSession, onGoToTab }) {
       </div>
     )}
 
-    <button style={{ ...S.btn, width:"100%", justifyContent:"center", fontSize:16 }} onClick={startSession}>
-          Start {activeDay} Session →
+    {!draftIsOpen(draft) && isWeightsMode(mode) && (() => {
+      const isDeloadNow = initMesocycle(data.mesocycle).phase === "deload";
+      const planned = todayExercises.filter(ex => !override.removed.includes(ex.name));
+      const pace = sessionPace(data.history);
+      const lengthOf = (tier) => estimateMinutes(trimForTime(planned, tier), data.goal, isDeloadNow, {}, {}, pace);
+      const full = lengthOf(null), short = lengthOf("short"), min = lengthOf("min");
+      const minutesLeft = minutesUntilFinish();
+      const advice = suggestTier(minutesLeft, full, short, min);
+      if (!override.tier && !advice) return null;
+      const chip = (tier, minutes) => (
+        <button key={tier || "full"} style={{ ...S.chip(override.tier === tier || (!override.tier && !tier)), flex:1, justifyContent:"center", minHeight:44 }}
+          onClick={() => setOverride({ tier, keep: [] })}>
+          {tierLabel(tier)} · {minutes} min
         </button>
+      );
+      return (
+        <div style={{ ...S.warn, marginBottom:10 }}>
+          <div style={{ marginBottom:8 }}>
+            ⏰ Finish by {LATEST_FINISH}: {minutesLeft > 0 ? `${minutesLeft} min left` : "that time has passed"}.
+            {advice === "short" && " The short version fits."}
+            {advice === "min" && " Only the minimum version fits."}
+            {advice === "stretch" && " Not enough time to lift: stretch tonight and this session stays next."}
+          </div>
+          <div style={{ display:"flex", gap:6 }}>{chip(null, full)}{chip("short", short)}{chip("min", min)}</div>
+        </div>
+      );
+    })()}
+
+    {draftIsOpen(draft) ? (
+      <div style={{ ...S.card, border:"1px solid var(--amber)", marginBottom:0 }}>
+        <div style={{ fontFamily:"var(--font-h)", fontWeight:700, fontSize:16, color:"var(--amber)" }}>Unfinished session</div>
+        <div style={{ fontFamily:"var(--font-m)", fontSize:11, color:"var(--muted)", margin:"4px 0 10px" }}>
+          {draft.day} · {draft.date} · {Object.values(draft.log).flat().filter(isLifted).length} sets saved
+        </div>
+        <button style={{ ...S.btn, width:"100%", justifyContent:"center", fontSize:16 }}
+          onClick={() => { setData(d => ({ ...d, activeDay: draft.day, activeMode: draft.mode })); onStartSession(); }}>
+          Continue {draft.day} →
+        </button>
+        {!confirmDiscard ? (
+          <button style={{ ...S.btnSm, width:"100%", justifyContent:"center", marginTop:8, color:"var(--red)" }} onClick={() => setConfirmDiscard(true)}>Discard it</button>
+        ) : (
+          <div style={{ display:"flex", gap:6, marginTop:8 }}>
+            <button style={{ ...S.btnSm, flex:1, justifyContent:"center", color:"var(--red)" }} onClick={() => { clearDraft(); setDraft(null); setConfirmDiscard(false); }}>Yes, discard</button>
+            <button style={{ ...S.btnSm, flex:1, justifyContent:"center" }} onClick={() => setConfirmDiscard(false)}>Keep</button>
+          </div>
+        )}
+      </div>
+    ) : (
+    <button style={{ ...S.btn, width:"100%", justifyContent:"center", fontSize:16 }} onClick={startSession}>
+          Start {activeDay}{override.tier ? ` ${tierLabel(override.tier)}` : ""} Session →
+        </button>
+    )}
         <button
           style={{ ...S.btnSm, width:"100%", justifyContent:"center", marginTop:8,
             color:"var(--green)", border:"1px solid rgba(34,197,94,0.35)", background:"rgba(34,197,94,0.06)" }}
@@ -6666,7 +6915,7 @@ export default function App() {
               <button style={S.btnSm} onClick={() => setTab("home")}>← Home</button>
             )}
             <button style={S.btnSm} onClick={() => setShowFavs(true)}>❤️ Favs</button>
-            <button style={S.btnSm} onClick={() => { setData({ ...PREFILLED_DATA, profileBaseline: { ...USER_BASELINE } }); setStep(0); }}>Reset</button>
+            <button style={S.btnSm} onClick={() => { clearDraft(); setData({ ...PREFILLED_DATA, profileBaseline: { ...USER_BASELINE } }); setStep(0); }}>Reset</button>
           </div>
         )}
       </div>
