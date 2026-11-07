@@ -2388,7 +2388,7 @@ function ScheduleScreen({ data, setData, onNext }) {
 }
 
 // ── Exercise Card ─────────────────────────────────────────────────────────────
-function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLog, history, priorNames, swap, onSwap, savedAt, onLogged }) {
+function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLog, history, priorNames, swap, onSwap, savedAt, onLogged, doneAt, onDone }) {
   const [expanded, setExpanded] = useState(false);
   const [showDesc, setShowDesc] = useState(false);
   const [tip, setTip] = useState("");
@@ -2602,7 +2602,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
   const rirColor = rir => { const r=parseInt(rir); return !r?"var(--border)":r<=1?"var(--red)":r<=3?"var(--amber)":"var(--blue)"; };
 
   return (
-    <div style={{ ...S.card, border: expanded ? "1px solid rgba(245,158,11,0.5)" : "1px solid var(--border)", transition:"border .2s" }}>
+    <div style={{ ...S.card, border: expanded ? "1px solid rgba(245,158,11,0.5)" : doneAt ? "1px solid rgba(34,197,94,0.45)" : "1px solid var(--border)", transition:"border .2s" }}>
 
       {/* ── Header row ── */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
@@ -2623,7 +2623,7 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
             <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--muted)", marginTop:2 }}>{activeEx.muscle}</div>
             {setsLifted > 0 && (
               <div style={{ fontFamily:"var(--font-m)", fontSize:10, color:"var(--green)", marginTop:2 }}>
-                ✓ saved{savedAt ? ` ${savedAt}` : ""} · {setsLifted}/{numSets} sets
+                {doneAt ? `✓ done ${doneAt}` : `✓ saved${savedAt ? ` ${savedAt}` : ""}`} · {setsLifted}/{numSets} sets
               </div>
             )}
             {activeEx.primer && (
@@ -2988,6 +2988,14 @@ function ExerciseCard({ ex, exNum, totalEx, goal, data, sessionLog, setSessionLo
               Session volume: {totalVol.toFixed(0)}kg{volDiff !== null ? ` (${parseInt(volDiff)>=0?"+":""}${volDiff}% vs last)` : ""}
             </div>
           )}
+
+          {/* Marks the exercise finished at this moment. The time of the last entry
+              was the only record before, and sets typed in after the fact gave
+              two exercises the same minute. */}
+          <button style={{ ...S.btnGreen, width:"100%", justifyContent:"center", minHeight:44, marginBottom:10, opacity: setsLifted ? 1 : 0.5 }}
+            disabled={!setsLifted} onClick={() => { onDone(key); setExpanded(false); }}>
+            {doneAt ? `✓ Done at ${doneAt} · tap to update` : "✓ Exercise done"}
+          </button>
 
           <RestTimer seconds={isTimed ? timedSec : rr.restSec} />
         </div>
@@ -3535,6 +3543,7 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
   const [sessionLog, setSessionLog] = useState(() => resumed?.log || {});
   const [swaps, setSwaps] = useState(() => resumed?.swaps || {});
   const [times, setTimes] = useState(() => resumed?.times || {});
+  const [done, setDone] = useState(() => resumed?.done || {});
   const [startedAt, setStartedAt] = useState(() => resumed?.startedAt || null);
   const [sessionDate] = useState(() => resumed?.date || new Date().toISOString().slice(0,10));
   const [finished, setFinished] = useState(false);
@@ -3553,12 +3562,16 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
     setTimes(t => ({ ...t, [name]: clockNow() }));
     setStartedAt(at => at || new Date().toISOString());
   };
+  const onDone = (name) => {
+    setDone(d => ({ ...d, [name]: clockNow() }));
+    setStartedAt(at => at || new Date().toISOString());
+  };
   useEffect(() => {
     if (planSaved || day === "Stretch") return;
     if (Object.keys(sessionLog).length || Object.keys(swaps).length || sessionRating || sessionNotes)
-      saveDraft({ day, mode, date: sessionDate, startedAt, log: sessionLog, swaps, times, rating: sessionRating, notes: sessionNotes });
+      saveDraft({ day, mode, date: sessionDate, startedAt, log: sessionLog, swaps, times, done, rating: sessionRating, notes: sessionNotes });
     else clearDraft();
-  }, [sessionLog, swaps, times, startedAt, sessionRating, sessionNotes, planSaved, day, mode, sessionDate]);
+  }, [sessionLog, swaps, times, done, startedAt, sessionRating, sessionNotes, planSaved, day, mode, sessionDate]);
   const [aiSummary, setAiSummary] = useState(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [appliedProposals, setAppliedProposals] = useState(() => new Set());
@@ -3612,7 +3625,8 @@ function WorkoutScreen({ data, setData, onBack, onGoToChat, setSyncStatus = () =
       log: sessionLog, rating: sessionRating, notes: sessionNotes, phase: meso.phase,
       ...(minutes > 0 && minutes <= 240 ? { duration: minutes, start: new Date(startedAt).toTimeString().slice(0,5) } : {}),
       ...(activeTier ? { trim: activeTier } : {}),
-      ...(Object.keys(times).length ? { times } : {}) };
+      // A tapped "Exercise done" is the finish time; the last entry stands in without one.
+      ...(Object.keys(times).length || Object.keys(done).length ? { times: { ...times, ...done } } : {}) };
     const { dayType, plan } = calcNextSessionPlan(day, sessionLog, data.goal, data);
     // Non-weights plans go to their own namespace, so they only ever feed back
     // into the same mode. In TRX/BW every entry comes out as a rep target.
@@ -3886,7 +3900,8 @@ A JSON array — and nothing else, no prose, no markdown code fences — of 1-3 
       ) : exercises.map((ex,i) => (
         <ExerciseCard key={`${mode}-${ex.name}-${i}`} ex={ex} exNum={i+1} totalEx={exercises.length} goal={data.goal} data={data} sessionLog={sessionLog} setSessionLog={setSessionLog} history={modeHistory} priorNames={priorByIndex[i]}
           swap={swaps[ex.name] || null} onSwap={(to) => setSwaps(all => ({ ...all, [ex.name]: to }))}
-          savedAt={times[swaps[ex.name]?.name || ex.name]} onLogged={onLogged} />
+          savedAt={times[swaps[ex.name]?.name || ex.name]} onLogged={onLogged}
+          doneAt={done[swaps[ex.name]?.name || ex.name]} onDone={onDone} />
       ))}
 
       <div style={{ ...S.card, marginTop:16 }}>

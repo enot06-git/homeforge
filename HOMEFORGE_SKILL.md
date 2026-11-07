@@ -257,8 +257,12 @@ that version, 0 = dropped.
 ### Session in progress ✅
 Sets used to live only in `WorkoutScreen` state, so a tab change, reload or the phone
 unloading the page erased them. Every entry now goes to `homeforge_session_draft`
-(log, swaps, per-exercise times, rating, notes), separate from `STORAGE_KEY`, so a
-Sheets restore cannot touch it. Each card shows "✓ saved 20:41 · 2/4 sets". A draft
+(log, swaps, per-exercise times, `done`, rating, notes), separate from `STORAGE_KEY`, so a
+Sheets restore cannot touch it. Each card shows "✓ saved 20:41 · 2/4 sets", and its
+"✓ Exercise done" button records the finish time ("✓ done 20:44") and collapses it. The
+last-entry time stood in alone before, and sets typed in after the fact gave two lifts
+the same minute (Nov 3: Face Pull and Y-Raise both 21:43). `times` in `_meta` takes the
+done time and falls back to the last entry. A draft
 with a lifted set holds the workout screen and replaces Start on Home with Continue /
 Discard. It saves under its own date and is cleared on Finish. It is local only: a
 Sheets row is written on Finish, because a mid-session row would replay as a session.
